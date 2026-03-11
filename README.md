@@ -23,7 +23,7 @@ After `onInsert` successfully POSTs, how should the confirmed row be landed in s
 
 ### Option A: no `writeInsert`, no `refetch: false` (default refetch) — [`option-a`](../../tree/option-a)
 
-Three problems:
+I'm experiencing the following challenges:
 
 1. **Redundant refetch**: Every sent message triggers a refetch of all loaded pages. With 4 pages loaded, that's at least 4 server round-trips to land 1 row.
 
