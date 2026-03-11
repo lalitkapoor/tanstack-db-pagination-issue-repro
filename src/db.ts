@@ -156,8 +156,9 @@ function createMessagesCollection(queryClient: QueryClient) {
         const msg = m.modified as Message
         await persist(`/api/messages`, "POST", msg)
       }
-      // Option A (default): wrappedOnInsert calls refetch() after this returns.
+      // Option B: skip refetch, no writeInsert. Message disappears.
       // See README.md for the full problem description and alternative options.
+      return { refetch: false }
     },
     onUpdate: () => {},
     onDelete: () => {},
