@@ -1,6 +1,6 @@
 import React, { useRef, useLayoutEffect, useCallback, useEffect } from "react"
 import { useLiveQuery, eq } from "@tanstack/react-db"
-import { getMessages, addMessage, addServerMessage, fetchCount } from "./db"
+import { getMessages, addMessage, addServerMessage, fetchCount, resetDatabase } from "./db"
 import { useIncrementalWindow } from "./use-incremental-window"
 
 const PAGE_SIZE = 50
@@ -140,6 +140,13 @@ export function App() {
         Network fetches: {displayFetchCount}
         <div style={{ marginTop: 4, color: "#666" }}>
           No queryCollectionOptions — explicit loaders + useIncrementalWindow
+          {" · "}
+          <button
+            onClick={() => resetDatabase()}
+            style={{ color: "#c00", cursor: "pointer", background: "none", border: "none", textDecoration: "underline", fontSize: 13 }}
+          >
+            Reset SQLite
+          </button>
         </div>
       </div>
 
