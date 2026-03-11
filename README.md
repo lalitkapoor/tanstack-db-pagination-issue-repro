@@ -25,7 +25,7 @@ After `onInsert` successfully POSTs, how should the confirmed row be landed in s
 
 I'm experiencing the following challenges:
 
-1. **Redundant refetch**: Every sent message triggers a refetch of all loaded pages. With 4 pages loaded, that's at least 4 server round-trips to land 1 row.
+1. **Redundant refetch**: Every sent message triggers a refetch of all loaded pages. If I load 4 pages worth of prior messages by clicking "Load older," that's at least 4 server round-trips to land 1 row.
 
 2. **Pagination gap after sending messages**: Loading older messages works fine when no messages have been sent. But after sending messages and then clicking "Load older," the pagination skips messages — the UI shows a gap in the message history (e.g., Message #1 jumps to #99, with #2–#98 missing). The refetch after insert shifts the first page's content, which causes the cursor-based pagination to get out of sync.
 
