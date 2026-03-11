@@ -1,6 +1,9 @@
 import React, { useRef, useLayoutEffect, useCallback, useEffect } from "react"
-import { useLiveInfiniteQuery, eq } from "@tanstack/react-db"
+import { useLiveQuery, eq } from "@tanstack/react-db"
 import { getMessages, addMessage, addServerMessage, fetchCount } from "./db"
+import { useIncrementalWindow } from "./use-incremental-window"
+
+const PAGE_SIZE = 50
 
 export function App() {
   const messages = getMessages()
@@ -8,6 +11,7 @@ export function App() {
   const [displayFetchCount, setDisplayFetchCount] = React.useState(fetchCount)
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevScrollHeightRef = useRef(0)
+  const wasAtBottomRef = useRef(true)
 
   // Poll fetch count for display
   useEffect(() => {
@@ -17,33 +21,53 @@ export function App() {
     return () => clearInterval(interval)
   }, [])
 
-  // Messages query — ordered by createdAt desc, paginated
-  const { data: rawMessages = [], hasNextPage, fetchNextPage, isFetchingNextPage } = useLiveInfiniteQuery(
+  // Passive query — shows everything in the collection for this thread (asc order)
+  const { data: allMessages = [] } = useLiveQuery(
     (q) =>
       q
         .from({ m: messages })
         .where(({ m }) => eq(m.threadId, "thread-1"))
-        .orderBy(({ m }) => m.createdAt, "desc"),
-    { pageSize: 50 },
+        .orderBy(({ m }) => m.createdAt, "asc"),
     ["thread-1"]
   )
 
-  // Reverse the desc order so oldest is at top
-  const sorted = React.useMemo(() => [...rawMessages].reverse(), [rawMessages])
+  // Background refresh of latest messages on mount
+  useEffect(() => {
+    void messages.utils.ensureLatestMessages(PAGE_SIZE)
+  }, [messages])
+
+  // Incremental window — shows newest pageSize, loads older on demand
+  const {
+    visibleItems: sorted,
+    canLoadMore,
+    isLoadingMore,
+    loadMore,
+  } = useIncrementalWindow({
+    items: allMessages,
+    pageSize: PAGE_SIZE,
+    resetKey: "thread-1",
+    getLoadMoreCursor: (items) => items[0]?.createdAt ?? null,
+    loadMoreRemote: (before) => messages.utils.loadOlderMessages(before, PAGE_SIZE),
+  })
+
+  // Track scroll position
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (el) wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+  }, [])
 
   // Preserve scroll position when loading older messages
-  const loadOlder = useCallback(() => {
+  const handleLoadOlder = useCallback(async () => {
     if (scrollRef.current) {
       prevScrollHeightRef.current = scrollRef.current.scrollHeight
     }
-    fetchNextPage?.()
-  }, [fetchNextPage])
+    await loadMore()
+  }, [loadMore])
 
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el || prevScrollHeightRef.current === 0) return
-    const newHeight = el.scrollHeight
-    const delta = newHeight - prevScrollHeightRef.current
+    const delta = el.scrollHeight - prevScrollHeightRef.current
     if (delta > 0) {
       el.scrollTop += delta
     }
@@ -54,8 +78,7 @@ export function App() {
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
-    if (isNearBottom) {
+    if (wasAtBottomRef.current) {
       el.scrollTop = el.scrollHeight
     }
   }, [sorted.length])
@@ -74,7 +97,6 @@ export function App() {
           content: msg.parts[0].content,
           createdAt: msg.createdAt,
         })
-        console.log("[SSE] writeInsert done, collection size:", (messages as any).size)
       } catch (err) {
         console.error("[SSE] parse error:", err)
       }
@@ -111,25 +133,28 @@ export function App() {
           fontSize: 13,
         }}
       >
-        <strong>TanStack DB Repro</strong> &mdash; Messages: {rawMessages.length} |
+        <strong>TanStack DB Repro — Option D</strong> &mdash; Visible: {sorted.length} |
+        In collection: {allMessages.length} |
         Network fetches: {displayFetchCount}
         <div style={{ marginTop: 4, color: "#666" }}>
-          Open DevTools Console + Network tab to observe cascading fetches
+          No queryCollectionOptions — explicit loaders + useIncrementalWindow
         </div>
       </div>
 
       {/* Message list */}
       <div
         ref={scrollRef}
+        onScroll={onScroll}
         style={{
           flex: 1,
           overflow: "auto",
           padding: "12px 16px",
         }}
       >
-        {hasNextPage && (
+        {canLoadMore && (
           <button
-            onClick={loadOlder}
+            onClick={handleLoadOlder}
+            disabled={isLoadingMore}
             style={{
               display: "block",
               margin: "0 auto 12px",
@@ -138,9 +163,10 @@ export function App() {
               border: "1px solid #ccc",
               borderRadius: 4,
               background: "#fff",
+              opacity: isLoadingMore ? 0.5 : 1,
             }}
           >
-            Load older messages
+            {isLoadingMore ? "Loading..." : "Load older messages"}
           </button>
         )}
 

@@ -1,23 +1,19 @@
 /**
- * TanStack DB collection setup for the repro.
+ * TanStack DB collection setup — Option D.
  *
- * Single "messages" collection using the on-demand pattern from applecart.
- * Demonstrates:
- *  1. writeInsert inside onInsert triggers pipeline cascade
- *  2. Default refetch after onInsert is redundant
+ * Drops queryCollectionOptions for messages. Uses raw persistedCollectionOptions
+ * with custom utils for explicit data loading. No wrappedOnInsert, no pipeline-
+ * driven loadSubset, no useLiveInfiniteQuery.
  */
 
-import { createCollection, extractSimpleComparisons } from "@tanstack/db"
+import { createCollection, createTransaction } from "@tanstack/db"
 import {
   openBrowserWASQLiteOPFSDatabase,
   BrowserCollectionCoordinator,
   createBrowserWASQLitePersistence,
   persistedCollectionOptions,
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
-import {
-  queryCollectionOptions,
-  type QueryCollectionUtils,
-} from "@tanstack/query-db-collection"
+import type { Collection } from "@tanstack/db"
 import type { QueryClient } from "@tanstack/react-query"
 
 // ---------------------------------------------------------------------------
@@ -56,7 +52,6 @@ async function initPersistence() {
 
 function getPersistence() {
   if (!_persistence) throw new Error("Persistence not initialized")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return _persistence as any
 }
 
@@ -70,9 +65,19 @@ export let fetchCount = 0
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Fetch ${url} failed: ${res.status}`)
+const PAGE_SIZE = 50
+
+async function fetchMessages(
+  opts: { limit?: number; before?: number } = {}
+): Promise<Message[]> {
+  fetchCount++
+  const params = new URLSearchParams({ limit: String(opts.limit ?? PAGE_SIZE) })
+  if (opts.before != null) {
+    params.set("before", String(opts.before))
+  }
+  console.log(`[fetchMessages] #${fetchCount} GET /api/messages?${params}`)
+  const res = await fetch(`/api/messages?${params}`)
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
   return res.json()
 }
 
@@ -92,105 +97,111 @@ async function persist(
 }
 
 // ---------------------------------------------------------------------------
-// Collection
+// Collection with custom utils
 // ---------------------------------------------------------------------------
 
-type Collections = { messages: ReturnType<typeof createMessagesCollection> }
-let _collections: Collections | null = null
+type PersistedCollectionUtils = {
+  acceptMutations: (transaction: { mutations: Array<unknown> }) => Promise<void> | void
+}
 
-function createMessagesCollection(queryClient: QueryClient) {
+type MessageCollectionUtils = PersistedCollectionUtils & {
+  ensureLatestMessages: (limit?: number) => Promise<number>
+  loadOlderMessages: (before: number, limit?: number) => Promise<number>
+  applyServerMessages: (rows: Message | Array<Message>) => Promise<void>
+}
+
+let messages: Collection<Message, string, MessageCollectionUtils>
+
+const messageUtils = {
+  async ensureLatestMessages(limit = PAGE_SIZE) {
+    const rows = await fetchMessages({ limit })
+    await messageUtils.applyServerMessages(rows)
+    return rows.length
+  },
+
+  async loadOlderMessages(before: number, limit = PAGE_SIZE) {
+    if (!Number.isFinite(before)) return 0
+    const rows = await fetchMessages({ before, limit })
+    await messageUtils.applyServerMessages(rows)
+    return rows.length
+  },
+
+  async applyServerMessages(input: Message | Array<Message>) {
+    const rows = Array.isArray(input) ? input : [input]
+    if (rows.length === 0) return
+
+    const dedupedRows = Array.from(
+      new Map(rows.map((row) => [row.id, row])).values()
+    )
+
+    const tx = createTransaction({
+      mutationFn: async ({ transaction }) => {
+        await messages.utils.acceptMutations(
+          transaction as { mutations: Array<unknown> }
+        )
+      },
+    })
+
+    tx.mutate(() => {
+      for (const row of dedupedRows) {
+        if (messages.has(row.id)) {
+          messages.update(row.id, (draft: Message) => {
+            Object.assign(draft, row)
+          })
+        } else {
+          messages.insert(row)
+        }
+      }
+    })
+
+    await tx.isPersisted.promise
+  },
+} satisfies Omit<MessageCollectionUtils, keyof PersistedCollectionUtils>
+
+function createMessagesCollection() {
   const persistence = getPersistence()
 
-  type TUtils = QueryCollectionUtils<Message, string, Message, unknown>
-
-  const queryOpts = queryCollectionOptions({
-    id: "messages",
-    queryKey: ["db", "messages"] as const,
-    syncMode: "on-demand" as const,
-    staleTime: Infinity,
-    queryFn: async (ctx: any) => {
-      fetchCount++
-      const opts = ctx.meta?.loadSubsetOptions
-      console.log("[queryFn]", {
-        fetchCount,
-        limit: opts?.limit,
-        offset: opts?.offset,
-        cursor: !!opts?.cursor,
-      })
-
-      const comparisons = extractSimpleComparisons(opts?.where)
-      const threadIdMatch = comparisons.find(
-        (c) => c.field.join(".") === "threadId"
-      )
-      if (!threadIdMatch?.value) return []
-
-      const limit = opts?.limit ?? 50
-      const params = new URLSearchParams({ limit: String(limit) })
-
-      // Cursor from useLiveInfiniteQuery pagination
-      const cursor = opts?.cursor
-      if (cursor?.whereFrom) {
-        const cursorComparisons = extractSimpleComparisons(cursor.whereFrom)
-        const beforeCursor = cursorComparisons.find(
-          (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
-        )
-        if (beforeCursor?.value != null) {
-          params.set("before", String(beforeCursor.value))
-        }
-      } else {
-        const beforeMatch = comparisons.find(
-          (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
-        )
-        if (beforeMatch?.value != null) {
-          params.set("before", String(beforeMatch.value))
-        }
-      }
-
-      console.log(`[queryFn] → GET /api/messages?${params}`)
-      return fetchJson<Message[]>(`/api/messages?${params}`)
-    },
-    queryClient,
-    getKey: (m: Message) => m.id,
-    onInsert: async ({ transaction }: any) => {
-      for (const m of transaction.mutations) {
-        const msg = m.modified as Message
-        await persist(`/api/messages`, "POST", msg)
-      }
-      // Option A (default): wrappedOnInsert calls refetch() after this returns.
-      // See README.md for the full problem description and alternative options.
-    },
-    onUpdate: () => {},
-    onDelete: () => {},
-  } as any)
-
-  return createCollection(
-    persistedCollectionOptions<Message, string, never, TUtils>({
-      ...(queryOpts as any),
+  messages = createCollection(
+    persistedCollectionOptions<Message, string, never, typeof messageUtils>({
+      id: "messages",
+      getKey: (m) => m.id,
+      syncMode: "on-demand" as const,
       persistence,
       schemaVersion: 1,
+      utils: messageUtils,
+      onInsert: async ({ transaction }: any) => {
+        for (const mutation of transaction.mutations) {
+          const msg = mutation.modified as Message
+          await persist(`/api/messages`, "POST", msg)
+        }
+        // No wrappedOnInsert — no automatic refetch.
+        // The optimistic row stays because onInsert succeeding means
+        // the transaction commits (not the queryCollectionOptions pattern
+        // where it clears the optimistic layer and needs synced state).
+      },
     })
-  )
+  ) as Collection<Message, string, MessageCollectionUtils>
+
+  return messages
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function initDB(queryClient: QueryClient) {
-  if (_collections) return _collections
+export async function initDB(_queryClient: QueryClient) {
   await initPersistence()
-  const messages = createMessagesCollection(queryClient)
-  _collections = { messages }
-  await (messages as any).stateWhenReady()
-  return _collections
+  const msgs = createMessagesCollection()
+  await (msgs as any).stateWhenReady()
+  return msgs
 }
 
 export function getMessages() {
-  if (!_collections) throw new Error("DB not initialized")
-  return _collections.messages
+  if (!messages) throw new Error("DB not initialized")
+  return messages
 }
 
-/** Optimistically insert a user message. Triggers onInsert → POST to server. */
+/** Optimistically insert a user message. onInsert POSTs to server. */
 export function addMessage(content: string) {
   const c = getMessages()
   const id = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -205,12 +216,9 @@ export function addMessage(content: string) {
 }
 
 /**
- * Insert a message that came FROM the server (SSE).
- * Uses writeInsert to write directly into synced state —
- * no onInsert fires, no server persist.
- *
- * THIS IS ISSUE 1: writeInsert triggers the orderBy pipeline's
- * loadMoreIfNeeded → requestLimitedSnapshot cascade.
+ * Insert a message from the server (SSE).
+ * Uses applyServerMessages → createTransaction + acceptMutations
+ * to write directly into synced state.
  */
 export function addServerMessage(msg: {
   id: string
@@ -219,7 +227,7 @@ export function addServerMessage(msg: {
   createdAt: number
 }) {
   const c = getMessages()
-  c.utils.writeInsert({
+  void c.utils.applyServerMessages({
     id: msg.id,
     threadId: "thread-1",
     role: msg.role,

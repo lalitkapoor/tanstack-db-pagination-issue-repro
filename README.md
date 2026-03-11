@@ -46,6 +46,12 @@ To reproduce:
 2. Send a message
 3. Watch the Network tab — repeated GETs with varying limits fire after the POST
 
+### Option D: no `queryCollectionOptions`, explicit loaders — [`option-d`](../../tree/option-d)
+
+Drops `queryCollectionOptions` for the messages collection entirely. Uses raw `persistedCollectionOptions` with custom utils (`ensureLatestMessages`, `loadOlderMessages`, `applyServerMessages`). Display uses `useLiveQuery` (no limit) + `useIncrementalWindow` for local-first windowed rendering. Server data is written via `createTransaction` + `acceptMutations`.
+
+No `wrappedOnInsert`, no pipeline-driven `loadSubset`, no `useLiveInfiniteQuery`.
+
 ## Notes
 
 - SSE messages use `writeInsert` outside of any transaction and work fine — no extra fetches.
