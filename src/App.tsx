@@ -115,6 +115,23 @@ export function App() {
         Network fetches: {displayFetchCount}
         <div style={{ marginTop: 4, color: "#666" }}>
           Open DevTools Console + Network tab to observe cascading fetches
+          {" · "}
+          <button
+            onClick={async () => {
+              try {
+                const root = await navigator.storage.getDirectory()
+                for await (const [name] of (root as any).entries()) {
+                  if (name.includes("repro")) {
+                    await root.removeEntry(name, { recursive: true }).catch(() => {})
+                  }
+                }
+              } catch {}
+              location.reload()
+            }}
+            style={{ color: "#c00", cursor: "pointer", background: "none", border: "none", textDecoration: "underline", fontSize: 13 }}
+          >
+            Reset SQLite
+          </button>
         </div>
       </div>
 
