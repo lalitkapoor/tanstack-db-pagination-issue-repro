@@ -50,6 +50,8 @@ export function App() {
     loadMoreRemote: (before) => messages.utils.loadOlderMessages(before, PAGE_SIZE),
   })
 
+  console.log('[App]', { allMessages: allMessages.length, visible: sorted.length, canLoadMore, isLoadingMore, oldestVisible: sorted[0]?.id, newestVisible: sorted[sorted.length - 1]?.id })
+
   // Track scroll position
   const onScroll = useCallback(() => {
     const el = scrollRef.current

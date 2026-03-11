@@ -46,25 +46,30 @@ export function useIncrementalWindow<TItem, TCursor>({
     if (isLoadingMore) return
 
     const nextVisibleCount = visibleCount + pageSize
+    console.log('[loadMore]', { itemsLength: items.length, visibleCount, nextVisibleCount, hasMoreRemote, canLoadMore })
     if (items.length >= nextVisibleCount) {
+      console.log('[loadMore] expanding locally')
       setVisibleCount(nextVisibleCount)
       return
     }
 
     const cursor = getLoadMoreCursor(items)
+    console.log('[loadMore] cursor:', cursor)
     if (cursor == null) return
 
     setIsLoadingMore(true)
     try {
       const fetchedCount = await loadMoreRemote(cursor)
+      console.log('[loadMore] fetched', fetchedCount, 'items')
       setVisibleCount((count) => count + pageSize)
       if (fetchedCount < pageSize) {
+        console.log('[loadMore] no more remote data')
         setHasMoreRemote(false)
       }
     } finally {
       setIsLoadingMore(false)
     }
-  }, [getLoadMoreCursor, isLoadingMore, items, loadMoreRemote, pageSize, visibleCount])
+  }, [getLoadMoreCursor, isLoadingMore, items, loadMoreRemote, pageSize, visibleCount, hasMoreRemote])
 
   return {
     visibleItems,

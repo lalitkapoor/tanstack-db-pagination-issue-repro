@@ -114,21 +114,28 @@ let messages: Collection<Message, string, MessageCollectionUtils>
 
 const messageUtils = {
   async ensureLatestMessages(limit = PAGE_SIZE) {
+    console.log('[ensureLatestMessages] fetching', limit)
     const rows = await fetchMessages({ limit })
+    console.log('[ensureLatestMessages] got', rows.length, 'rows')
     await messageUtils.applyServerMessages(rows)
+    console.log('[ensureLatestMessages] applied, collection size:', (messages as any).size)
     return rows.length
   },
 
   async loadOlderMessages(before: number, limit = PAGE_SIZE) {
+    console.log('[loadOlderMessages] before:', before, 'limit:', limit)
     if (!Number.isFinite(before)) return 0
     const rows = await fetchMessages({ before, limit })
+    console.log('[loadOlderMessages] got', rows.length, 'rows')
     await messageUtils.applyServerMessages(rows)
+    console.log('[loadOlderMessages] applied, collection size:', (messages as any).size)
     return rows.length
   },
 
   async applyServerMessages(input: Message | Array<Message>) {
     const rows = Array.isArray(input) ? input : [input]
     if (rows.length === 0) return
+    console.log('[applyServerMessages]', rows.length, 'rows, first:', rows[0]?.id, 'last:', rows[rows.length - 1]?.id)
 
     const dedupedRows = Array.from(
       new Map(rows.map((row) => [row.id, row])).values()
