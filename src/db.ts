@@ -38,11 +38,12 @@ export type Message = {
 
 let _persistence: ReturnType<typeof createBrowserWASQLitePersistence> | null =
   null
+let _database: Awaited<ReturnType<typeof openBrowserWASQLiteOPFSDatabase>> | null = null
 
 async function initPersistence() {
   if (_persistence) return _persistence
 
-  const database = await openBrowserWASQLiteOPFSDatabase({
+  _database = await openBrowserWASQLiteOPFSDatabase({
     databaseName: "repro.sqlite",
   })
 
@@ -50,8 +51,26 @@ async function initPersistence() {
     dbName: "repro",
   })
 
-  _persistence = createBrowserWASQLitePersistence({ database, coordinator })
+  _persistence = createBrowserWASQLitePersistence({ database: _database, coordinator })
   return _persistence
+}
+
+/** Close the SQLite database, terminate the OPFS worker, delete the file, and reload. */
+export async function resetDatabase() {
+  if (_database) {
+    await _database.close()
+    _database = null
+    _persistence = null
+  }
+  try {
+    const root = await navigator.storage.getDirectory()
+    for await (const [name] of (root as any).entries()) {
+      if (name.includes("repro")) {
+        await root.removeEntry(name, { recursive: true }).catch(() => {})
+      }
+    }
+  } catch {}
+  location.reload()
 }
 
 function getPersistence() {
