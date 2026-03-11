@@ -23,7 +23,7 @@ After `onInsert` successfully POSTs, how should the confirmed row be landed in s
 
 We tried three different approaches inside `onInsert` after the POST succeeds:
 
-### Option A: no `writeInsert`, no `refetch: false` (default refetch) — [`option-a`](../../tree/option-a)
+### Option A: no `writeInsert` (default refetch) — [`option-a`](../../tree/option-a)
 
 I'm experiencing the following challenges:
 
