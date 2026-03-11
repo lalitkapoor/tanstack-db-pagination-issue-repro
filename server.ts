@@ -11,8 +11,9 @@ type Message = {
   createdAt: number
 }
 
-// Seed 200 messages, spaced 1 second apart going backwards from now
-const now = Date.now()
+// Seed 200 messages with fixed timestamps so they don't change on server restart.
+// Base timestamp: 2025-01-01T00:00:00Z, spaced 1 second apart.
+const SEED_BASE = 1735689600000
 const messages: Message[] = []
 for (let i = 0; i < 200; i++) {
   messages.push({
@@ -20,7 +21,7 @@ for (let i = 0; i < 200; i++) {
     threadId: "thread-1",
     role: i % 2 === 0 ? "user" : "assistant",
     content: `Message #${i + 1}`,
-    createdAt: now - (200 - i) * 1000,
+    createdAt: SEED_BASE + i * 1000,
   })
 }
 
