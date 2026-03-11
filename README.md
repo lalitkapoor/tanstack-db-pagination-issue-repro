@@ -31,8 +31,6 @@ I'm experiencing the following challenges:
 
 2. **Pagination gap after sending messages**: Loading older messages works fine when no messages have been sent. But after sending messages and then clicking "Load older," the pagination skips messages — the UI shows a gap in the message history (e.g., Message #1 jumps to #99, with #2–#98 missing). The refetch after insert shifts the first page's content, which causes the cursor-based pagination to get out of sync.
 
-3. **"Load older" disappears early**: Sometimes the "Load older" button disappears before all messages have been loaded, leaving the user stuck partway through the history.
-
 ### Option B: no `writeInsert`, `refetch: false` — [`option-b`](../../tree/option-b)
 
 The `onInsert` succeeds but the optimistic row is discarded when the transaction completes — the message disappears. We expected the successful transaction to promote the row to synced state. Is there a way to make that happen, or to return the confirmed record from `onInsert` so it can be synced?
