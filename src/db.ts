@@ -156,21 +156,8 @@ function createMessagesCollection(queryClient: QueryClient) {
         const msg = m.modified as Message
         await persist(`/api/messages`, "POST", msg)
       }
-
-      // PROBLEM: When onInsert completes, the optimistic row is removed.
-      // The row must exist in synced state to stay visible.
-      //
-      // writeInsert + refetch: false works with 1 page loaded. But after
-      // loading older pages via useLiveInfiniteQuery, writeInsert inside
-      // onInsert triggers repeated GETs with varying limits.
-      //
+      // Option A (default): wrappedOnInsert calls refetch() after this returns.
       // See README.md for the full problem description and alternative options.
-
-      const c = _collections!.messages
-      for (const m of transaction.mutations) {
-        c.utils.writeInsert(m.modified as Message)
-      }
-      return { refetch: false }
     },
     onUpdate: () => {},
     onDelete: () => {},
