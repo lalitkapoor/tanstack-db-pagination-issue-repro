@@ -1,6 +1,6 @@
 import React, { useRef, useLayoutEffect, useCallback, useEffect } from "react"
 import { useLiveInfiniteQuery, eq } from "@tanstack/react-db"
-import { getMessages, addMessage, addServerMessage, fetchCount } from "./db"
+import { getMessages, addMessage, addServerMessage, fetchCount, resetDatabase } from "./db"
 
 export function App() {
   const messages = getMessages()
@@ -117,17 +117,7 @@ export function App() {
           Open DevTools Console + Network tab to observe cascading fetches
           {" · "}
           <button
-            onClick={async () => {
-              try {
-                const root = await navigator.storage.getDirectory()
-                for await (const [name] of (root as any).entries()) {
-                  if (name.includes("repro")) {
-                    await root.removeEntry(name, { recursive: true }).catch(() => {})
-                  }
-                }
-              } catch {}
-              location.reload()
-            }}
+            onClick={() => resetDatabase()}
             style={{ color: "#c00", cursor: "pointer", background: "none", border: "none", textDecoration: "underline", fontSize: 13 }}
           >
             Reset SQLite
