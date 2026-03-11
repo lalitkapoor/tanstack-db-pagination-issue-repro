@@ -21,19 +21,15 @@ After `onInsert` successfully POSTs, how should the confirmed row be landed in s
 
 ## What we've tried
 
-### Option A: no `writeInsert`, no `refetch: false` (default refetch)
+### Option A: no `writeInsert`, no `refetch: false` (default refetch) — [`option-a`](../../tree/option-a)
 
 This works, but `refetch()` re-fetches every loaded page (each page is a separate query observer). With 4 pages loaded, that's 4 server round-trips to land 1 row. Is there a way to target just the inserted row?
 
-To try: remove the `writeInsert` call and the `return { refetch: false }` line in `onInsert` in `src/db.ts`.
-
-### Option B: no `writeInsert`, `refetch: false`
+### Option B: no `writeInsert`, `refetch: false` — [`option-b`](../../tree/option-b)
 
 The `onInsert` succeeds but the optimistic row is discarded when the transaction completes — the message disappears. We expected the successful transaction to promote the row to synced state. Is there a way to make that happen, or to return the confirmed record from `onInsert` so it can be synced?
 
-To try: remove the `writeInsert` call in `onInsert` in `src/db.ts` (keep `return { refetch: false }`).
-
-### Option C: `writeInsert`, `refetch: false` (current code)
+### Option C: `writeInsert`, `refetch: false` — [`option-c`](../../tree/option-c)
 
 Works with 1 page loaded. With multiple pages loaded via `useLiveInfiniteQuery`, `writeInsert` inside the active `onInsert` transaction causes the message to flash in and disappear from the UI, and triggers repeated GETs with varying limits.
 
