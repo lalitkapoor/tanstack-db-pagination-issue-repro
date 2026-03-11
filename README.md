@@ -23,7 +23,13 @@ After `onInsert` successfully POSTs, how should the confirmed row be landed in s
 
 ### Option A: no `writeInsert`, no `refetch: false` (default refetch) — [`option-a`](../../tree/option-a)
 
-This works, but `refetch()` re-fetches every loaded page (each page is a separate query observer). With 4 pages loaded, that's 4 server round-trips to land 1 row. Is there a way to target just the inserted row?
+Three problems:
+
+1. **Redundant refetch**: Every sent message triggers a refetch of all loaded pages. With 4 pages loaded, that's at least 4 server round-trips to land 1 row.
+
+2. **Pagination gap after sending messages**: Loading older messages works fine when no messages have been sent. But after sending messages and then clicking "Load older," the pagination skips messages — the UI shows a gap in the message history (e.g., Message #1 jumps to #99, with #2–#98 missing). The refetch after insert shifts the first page's content, which causes the cursor-based pagination to get out of sync.
+
+3. **"Load older" disappears early**: Sometimes the "Load older" button disappears before all messages have been loaded, leaving the user stuck partway through the history.
 
 ### Option B: no `writeInsert`, `refetch: false` — [`option-b`](../../tree/option-b)
 
