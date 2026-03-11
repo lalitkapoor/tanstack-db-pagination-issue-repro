@@ -1,0 +1,34 @@
+{
+  "name": "tanstack-db-repro",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:server": "bun --watch server.ts",
+    "dev:client": "vite dev"
+  },
+  "dependencies": {
+    "@tanstack/db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-0.5.30.tgz",
+    "@tanstack/db-browser-wa-sqlite-persisted-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-browser-wa-sqlite-persisted-collection-0.1.0.tgz",
+    "@tanstack/db-ivm": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-ivm-0.1.17.tgz",
+    "@tanstack/db-sqlite-persisted-collection-core": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-sqlite-persisted-collection-core-0.1.0.tgz",
+    "@tanstack/query-db-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-query-db-collection-1.0.27.tgz",
+    "@tanstack/react-db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-react-db-0.1.74.tgz",
+    "@tanstack/react-query": "^5.90.21",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "overrides": {
+    "@tanstack/db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-0.5.30.tgz",
+    "@tanstack/db-ivm": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-ivm-0.1.17.tgz",
+    "@tanstack/db-sqlite-persisted-collection-core": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-db-sqlite-persisted-collection-core-0.1.0.tgz",
+    "@tanstack/query-db-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.1-pr1230/tanstack-query-db-collection-1.0.27.tgz"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1"
+  }
+}
