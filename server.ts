@@ -97,8 +97,12 @@ const server = Bun.serve({
       }
 
       const result = filtered.slice(0, limit)
+      const first = result[0]
+      const last = result[result.length - 1]
       console.log(
-        `[server] GET /api/messages limit=${limit} before=${before ?? "none"} → returning ${result.length} messages`
+        `[server] GET /api/messages limit=${limit} before=${before ?? "none"} → ${result.length} msgs` +
+        (first ? ` [${first.id} (t=${first.createdAt}) → ${last.id} (t=${last.createdAt})]` : '') +
+        ` (total in store: ${messages.length})`
       )
 
       return Response.json(result, { headers: corsHeaders })
@@ -108,7 +112,7 @@ const server = Bun.serve({
     if (url.pathname === "/api/messages" && req.method === "POST") {
       const body = (await req.json()) as Message
       messages.push(body)
-      console.log(`[server] POST /api/messages id=${body.id}`)
+      console.log(`[server] POST /api/messages id=${body.id} createdAt=${body.createdAt} (total: ${messages.length})`)
       scheduleAssistantReply(body)
       return new Response("OK", { status: 200, headers: corsHeaders })
     }
