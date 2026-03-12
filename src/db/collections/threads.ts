@@ -16,6 +16,17 @@ type Thread = {
   updatedAt: number
 }
 
+type ThreadQueryShape =
+  | {
+      kind: "by-id"
+      threadId: string
+    }
+  | {
+      kind: "list"
+      before?: number
+      limit: number
+    }
+
 export class ThreadsStore {
   private collectionInstance: ReturnType<ThreadsStore["createCollection"]> | null =
     null
@@ -25,8 +36,19 @@ export class ThreadsStore {
     private readonly databaseContext: DatabaseContext,
   ) {}
 
-  private extractQueryParams(opts: LoadSubsetOptions) {
+  private getQueryShape(opts: LoadSubsetOptions): ThreadQueryShape {
     const comparisons = extractSimpleComparisons(opts.where)
+    const threadId = comparisons.find((c) => c.field.join(".") === "id")?.value as
+      | string
+      | undefined
+
+    if (threadId) {
+      return {
+        kind: "by-id",
+        threadId,
+      }
+    }
+
     const limit = opts.limit ?? 50
 
     let before: number | undefined
@@ -47,17 +69,33 @@ export class ThreadsStore {
       )?.value as number | undefined
     }
 
-    return { before, limit }
+    return {
+      kind: "list",
+      before,
+      limit,
+    }
   }
 
   private async fetchThreads(opts: LoadSubsetOptions = {}) {
-    const { before, limit } = this.extractQueryParams(opts)
+    const query = this.getQueryShape(opts)
+
+    if (query.kind === "by-id") {
+      const res = await fetch(`/api/threads/${query.threadId}`)
+      if (res.status === 404) {
+        return [] as Thread[]
+      }
+      if (!res.ok) {
+        throw new Error(`Fetch /api/threads/${query.threadId} failed: ${res.status}`)
+      }
+      return [(await res.json()) as Thread]
+    }
+
     const params = new URLSearchParams({
-      limit: String(limit),
+      limit: String(query.limit),
     })
 
-    if (before != null) {
-      params.set("before", String(before))
+    if (query.before != null) {
+      params.set("before", String(query.before))
     }
 
     return fetchJson<Thread[]>(`/api/threads?${params}`)
@@ -67,8 +105,11 @@ export class ThreadsStore {
     const queryOpts = queryCollectionOptions({
       id: "threads",
       queryKey: (opts: LoadSubsetOptions) => {
-        const { before, limit } = this.extractQueryParams(opts)
-        return ["db", "threads", before ?? "latest", limit] as const
+        const query = this.getQueryShape(opts)
+        if (query.kind === "by-id") {
+          return ["db", "threads", "by-id", query.threadId] as const
+        }
+        return ["db", "threads", "list", query.before ?? "latest", query.limit] as const
       },
       syncMode: "on-demand" as const,
       queryFn: (ctx) => this.fetchThreads(ctx.meta?.loadSubsetOptions ?? {}),

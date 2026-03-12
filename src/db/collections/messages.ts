@@ -17,6 +17,14 @@ type Message = {
   createdAt: number
 }
 
+type MessageQueryShape =
+  | {
+      kind: "thread"
+      threadId: string
+      before?: number
+      limit: number
+    }
+
 export class MessagesStore {
   private collectionInstance: ReturnType<MessagesStore["createCollection"]> | null =
     null
@@ -27,10 +35,15 @@ export class MessagesStore {
     private readonly databaseContext: DatabaseContext,
   ) {}
 
-  private extractQueryParams(opts: LoadSubsetOptions) {
+  private getQueryShape(opts: LoadSubsetOptions): MessageQueryShape {
     const comparisons = extractSimpleComparisons(opts.where)
     const threadId = comparisons.find((c) => c.field.join(".") === "threadId")
       ?.value as string | undefined
+
+    if (!threadId) {
+      throw new Error("Message queries must include threadId")
+    }
+
     const limit = opts.limit ?? 50
 
     let before: number | undefined
@@ -51,42 +64,49 @@ export class MessagesStore {
       )?.value as number | undefined
     }
 
-    return { threadId, before, limit }
+    return {
+      kind: "thread",
+      threadId,
+      before,
+      limit,
+    }
   }
 
   private async fetchMessages(opts: LoadSubsetOptions = {}) {
     this.internalFetchCount++
-    const { threadId, before, limit } = this.extractQueryParams(opts)
-
-    if (!threadId) {
-      return [] as Message[]
-    }
+    const query = this.getQueryShape(opts)
 
     const params = new URLSearchParams({
-      threadId,
-      limit: String(limit),
+      limit: String(query.limit),
     })
 
-    if (before != null) {
-      params.set("before", String(before))
+    if (query.before != null) {
+      params.set("before", String(query.before))
     }
 
     console.log("[messages queryFn]", {
       fetchCount: this.internalFetchCount,
-      threadId,
-      before: before ?? "none",
-      limit,
+      threadId: query.threadId,
+      before: query.before ?? "none",
+      limit: query.limit,
     })
 
-    return fetchJson<Message[]>(`/api/messages?${params}`)
+    return fetchJson<Message[]>(`/api/threads/${query.threadId}/messages?${params}`)
   }
 
   private createCollection() {
     const queryOpts = queryCollectionOptions({
       id: "messages",
       queryKey: (opts: LoadSubsetOptions) => {
-        const { threadId, before, limit } = this.extractQueryParams(opts)
-        return ["db", "messages", threadId ?? null, before ?? "latest", limit] as const
+        const query = this.getQueryShape(opts)
+        return [
+          "db",
+          "messages",
+          "thread",
+          query.threadId,
+          query.before ?? "latest",
+          query.limit,
+        ] as const
       },
       syncMode: "on-demand" as const,
       queryFn: (ctx) => this.fetchMessages(ctx.meta?.loadSubsetOptions ?? {}),
@@ -94,7 +114,7 @@ export class MessagesStore {
       getKey: (message) => message.id,
       onInsert: async ({ transaction }) => {
         for (const mutation of transaction.mutations) {
-          await persist("/api/messages", "POST", mutation.modified)
+          await persist(`/api/threads/${mutation.modified.threadId}/messages`, "POST", mutation.modified)
         }
 
         this.collection.utils.writeBatch(() => {

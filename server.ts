@@ -91,6 +91,17 @@ const corsHeaders = {
 
 const encoder = new TextEncoder()
 
+function getThreadMessagesPath(pathname: string) {
+  const match = pathname.match(/^\/api\/threads\/([^/]+)\/messages$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    threadId: decodeURIComponent(match[1]),
+  }
+}
+
 const server = Bun.serve({
   port: 11001,
   idleTimeout: 255,
@@ -102,9 +113,11 @@ const server = Bun.serve({
       return new Response(null, { status: 204, headers: corsHeaders })
     }
 
-    // GET /api/messages?limit=N&before=T
-    if (url.pathname === "/api/messages" && req.method === "GET") {
-      const threadId = url.searchParams.get("threadId") || "thread-1"
+    const threadMessagesPath = getThreadMessagesPath(url.pathname)
+
+    // GET /api/threads/:threadId/messages?limit=N&before=T
+    if (threadMessagesPath && req.method === "GET") {
+      const { threadId } = threadMessagesPath
       const limit = Number(url.searchParams.get("limit") || "50")
       const before = url.searchParams.get("before")
 
@@ -121,7 +134,7 @@ const server = Bun.serve({
       const first = result[0]
       const last = result[result.length - 1]
       console.log(
-        `[server] GET /api/messages threadId=${threadId} limit=${limit} before=${before ?? "none"} → ${result.length} msgs` +
+        `[server] GET /api/threads/${threadId}/messages limit=${limit} before=${before ?? "none"} → ${result.length} msgs` +
         (first ? ` [${first.id} (t=${first.createdAt}) → ${last.id} (t=${last.createdAt})]` : '') +
         ` (total in store: ${messages.length})`
       )
@@ -129,15 +142,21 @@ const server = Bun.serve({
       return Response.json(result, { headers: corsHeaders })
     }
 
-    // POST /api/messages
-    if (url.pathname === "/api/messages" && req.method === "POST") {
+    // POST /api/threads/:threadId/messages
+    if (threadMessagesPath && req.method === "POST") {
+      const { threadId } = threadMessagesPath
       const body = (await req.json()) as Message
+      if (body.threadId !== threadId) {
+        return new Response("Thread id mismatch", { status: 400, headers: corsHeaders })
+      }
       messages.push(body)
       const thread = threads.find((entry) => entry.id === body.threadId)
       if (thread) {
         thread.updatedAt = Math.max(thread.updatedAt, body.createdAt)
       }
-      console.log(`[server] POST /api/messages id=${body.id} createdAt=${body.createdAt} (total: ${messages.length})`)
+      console.log(
+        `[server] POST /api/threads/${threadId}/messages id=${body.id} createdAt=${body.createdAt} (total: ${messages.length})`,
+      )
       scheduleAssistantReply(body)
       return Response.json(body, { headers: corsHeaders })
     }
@@ -164,6 +183,18 @@ const server = Bun.serve({
       threads.push(body)
       console.log(`[server] POST /api/threads id=${body.id} title=${body.title} (total: ${threads.length})`)
       return Response.json(body, { headers: corsHeaders })
+    }
+
+    if (url.pathname.startsWith("/api/threads/") && req.method === "GET") {
+      const id = url.pathname.slice("/api/threads/".length)
+      const thread = threads.find((entry) => entry.id === id)
+
+      if (!thread) {
+        return new Response("Not found", { status: 404, headers: corsHeaders })
+      }
+
+      console.log(`[server] GET /api/threads/${id}`)
+      return Response.json(thread, { headers: corsHeaders })
     }
 
     if (url.pathname.startsWith("/api/threads/") && req.method === "PUT") {
