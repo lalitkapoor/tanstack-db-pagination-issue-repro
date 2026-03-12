@@ -8,6 +8,19 @@ import type {
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 
 type PersistedRow = Record<string, unknown>
+type BrowserSQLiteDebug = {
+  sql: <TRow = unknown>(
+    statement: string,
+    params?: ReadonlyArray<unknown>,
+  ) => Promise<ReadonlyArray<TRow>>
+  tables: () => Promise<ReadonlyArray<{ name: string }>>
+}
+
+declare global {
+  interface Window {
+    __reproDb?: BrowserSQLiteDebug
+  }
+}
 
 export class DatabaseContext {
   private readonly persistence: PersistedCollectionPersistence<PersistedRow, string>
@@ -22,6 +35,17 @@ export class DatabaseContext {
     // Browser OPFS persistence is intended to be shared per database. Expose
     // typed collection views over that one shared runtime instance.
     return this.persistence as unknown as PersistedCollectionPersistence<T, string>
+  }
+
+  public get debug(): BrowserSQLiteDebug {
+    return {
+      sql: (statement, params = []) => this.database.execute(statement, params),
+      tables: () =>
+        this.database.execute<{ name: string }>(
+          "select name from sqlite_master where type = ? order by name",
+          ["table"],
+        ),
+    }
   }
 }
 
@@ -40,16 +64,32 @@ export async function initPersistence() {
 
   _databaseContext = new DatabaseContext(_sqliteDatabase)
 
+  if (import.meta.env.DEV) {
+    window.__reproDb = _databaseContext.debug
+    console.info(
+      "[debug] window.__reproDb.sql(statement, params?) is available for client SQLite inspection",
+    )
+  }
+
   return _databaseContext
 }
 
-/** Close the SQLite database, delete the OPFS file, and reload the page. */
-export async function resetDatabase() {
+async function closePersistence() {
   if (_sqliteDatabase) {
     await _sqliteDatabase.close?.()
     _sqliteDatabase = null
-    _databaseContext = null
   }
+
+  _databaseContext = null
+
+  if (import.meta.env.DEV) {
+    delete window.__reproDb
+  }
+}
+
+/** Delete the client OPFS SQLite storage after live collections are stopped. */
+export async function resetPersistenceStorage() {
+  await closePersistence()
 
   try {
     const root = await navigator.storage.getDirectory()
@@ -62,6 +102,4 @@ export async function resetDatabase() {
   } catch {
     // OPFS not available or already clean
   }
-
-  location.reload()
 }

@@ -365,36 +365,36 @@ export function App() {
             </Card>
 
             <Card className="min-h-0 border border-border/60 shadow-none">
-              <CardHeader>
-                <CardTitle>Messages</CardTitle>
-                <CardDescription>
-                  Infinite query scoped to the selected thread. Older pages load above the current
-                  transcript.
-                </CardDescription>
+              <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <div>
+                  <CardTitle>Messages</CardTitle>
+                  <CardDescription>
+                    Infinite query scoped to the selected thread. Older pages load above the current
+                    transcript.
+                  </CardDescription>
+                </div>
+                <CardAction className="flex items-center gap-2">
+                  <Badge variant="secondary">{rawMessages.length} loaded</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadOlderMessages}
+                    disabled={!hasMoreMessages || isFetchingOlderMessages}
+                  >
+                    {isFetchingOlderMessages ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <ArrowUp />
+                    )}
+                    {hasMoreMessages ? "Load older messages" : "No older messages"}
+                  </Button>
+                </CardAction>
               </CardHeader>
               <CardContent className="flex min-h-0 flex-1 flex-col">
                 <div
                   ref={scrollRef}
                   className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto rounded-md border border-border bg-muted/15 p-3"
                 >
-                  {hasMoreMessages && (
-                    <div className="flex justify-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={loadOlderMessages}
-                        disabled={isFetchingOlderMessages}
-                      >
-                        {isFetchingOlderMessages ? (
-                          <LoaderCircle className="animate-spin" />
-                        ) : (
-                          <ArrowUp />
-                        )}
-                        Load older messages
-                      </Button>
-                    </div>
-                  )}
-
                   {sortedMessages.length === 0 ? (
                     <Card size="sm" className="border border-dashed border-border/80 bg-background shadow-none">
                       <CardContent className="py-6 text-center text-xs text-muted-foreground">

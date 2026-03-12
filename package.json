@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev:server": "bun --watch server.ts",
-    "dev:client": "vite dev"
+    "dev:client": "vite dev",
+    "db:query": "bun scripts/query-server-db.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

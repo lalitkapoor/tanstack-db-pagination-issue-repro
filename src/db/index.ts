@@ -1,11 +1,20 @@
 import type { QueryClient } from "@tanstack/react-query"
-import { initPersistence, resetDatabase, type DatabaseContext } from "./persistence"
+import {
+  initPersistence,
+  resetPersistenceStorage,
+  type DatabaseContext,
+} from "./persistence"
 import { MessagesStore } from "./collections/messages"
 import { ThreadsStore } from "./collections/threads"
+
+type CleanupTarget = {
+  cleanup(): Promise<void>
+}
 
 class AppDB {
   public readonly messages: MessagesStore
   public readonly threads: ThreadsStore
+  private cleanupTargets: CleanupTarget[] = []
 
   constructor(queryClient: QueryClient, databaseContext: DatabaseContext) {
     this.messages = new MessagesStore(queryClient, databaseContext)
@@ -13,8 +22,22 @@ class AppDB {
   }
 
   public async init() {
-    await Promise.all([this.messages.init(), this.threads.init()])
+    const [messagesCollection, threadsCollection] = await Promise.all([
+      this.messages.init(),
+      this.threads.init(),
+    ])
+
+    this.cleanupTargets = [messagesCollection, threadsCollection]
     return this
+  }
+
+  public async cleanup() {
+    const cleanupTargets = this.cleanupTargets
+    this.cleanupTargets = []
+
+    await Promise.allSettled(
+      cleanupTargets.map((collection) => collection.cleanup()),
+    )
   }
 }
 
@@ -41,4 +64,14 @@ export function getDB() {
   return _db
 }
 
-export { resetDatabase }
+export async function resetDatabase() {
+  const db = _db
+  _db = null
+
+  if (db) {
+    await db.cleanup()
+  }
+
+  await resetPersistenceStorage()
+  location.reload()
+}
