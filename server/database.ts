@@ -22,6 +22,16 @@ type MessageRow = {
   created_at: number
 }
 
+type MessageCursor = {
+  createdAt: number
+  id: string
+}
+
+type ThreadCursor = {
+  updatedAt: number
+  id: string
+}
+
 function makeSeedMessageId(index: number) {
   return `00000000-0000-4000-8000-${(index + 2).toString(16).padStart(12, "0")}`
 }
@@ -45,8 +55,13 @@ function toMessage(row: MessageRow): Message {
   }
 }
 
-export function createServerDatabase() {
-  const path = join(process.cwd(), ".data", "server.sqlite")
+type CreateServerDatabaseOptions = {
+  path?: string
+  bootstrap?: boolean
+}
+
+export function createServerDatabase(options: CreateServerDatabaseOptions = {}) {
+  const path = options.path ?? join(process.cwd(), ".data", "server.sqlite")
 
   mkdirSync(dirname(path), { recursive: true })
 
@@ -104,6 +119,16 @@ export function createServerDatabase() {
     ORDER BY updated_at DESC, id DESC
     LIMIT ?1
   `)
+  const listThreadsCursorStatement = db.query<ThreadRow, [number, number, string]>(`
+    SELECT id, title, created_at, updated_at
+    FROM threads
+    WHERE (
+      updated_at < ?2
+      OR (updated_at = ?2 AND id < ?3)
+    )
+    ORDER BY updated_at DESC, id DESC
+    LIMIT ?1
+  `)
   const listThreadsLatestStatement = db.query<ThreadRow, [number]>(`
     SELECT id, title, created_at, updated_at
     FROM threads
@@ -128,6 +153,17 @@ export function createServerDatabase() {
     SELECT id, thread_id, role, content, created_at
     FROM messages
     WHERE thread_id = ?1 AND created_at < ?3
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?2
+  `)
+  const listMessagesCursorStatement = db.query<MessageRow, [string, number, number, string]>(`
+    SELECT id, thread_id, role, content, created_at
+    FROM messages
+    WHERE thread_id = ?1
+      AND (
+        created_at < ?3
+        OR (created_at = ?3 AND id < ?4)
+      )
     ORDER BY created_at DESC, id DESC
     LIMIT ?2
   `)
@@ -194,7 +230,9 @@ export function createServerDatabase() {
     touchThreadStatement.run(message.createdAt, message.threadId)
   })
 
-  bootstrapDatabase()
+  if (options.bootstrap ?? true) {
+    bootstrapDatabase()
+  }
 
   return {
     path,
@@ -206,11 +244,13 @@ export function createServerDatabase() {
       }
     },
 
-    listThreads(limit: number, before?: number) {
+    listThreads(limit: number, before?: number | ThreadCursor) {
       const rows =
         before == null
           ? listThreadsLatestStatement.all(limit)
-          : listThreadsStatement.all(limit, before)
+          : typeof before === "number"
+            ? listThreadsStatement.all(limit, before)
+            : listThreadsCursorStatement.all(limit, before.updatedAt, before.id)
 
       return rows.map(toThread)
     },
@@ -220,11 +260,18 @@ export function createServerDatabase() {
       return row ? toThread(row) : null
     },
 
-    listMessages(threadId: string, limit: number, before?: number) {
+    listMessages(threadId: string, limit: number, before?: number | MessageCursor) {
       const rows =
         before == null
           ? listMessagesLatestStatement.all(threadId, limit)
-          : listMessagesStatement.all(threadId, limit, before)
+          : typeof before === "number"
+            ? listMessagesStatement.all(threadId, limit, before)
+            : listMessagesCursorStatement.all(
+                threadId,
+                limit,
+                before.createdAt,
+                before.id,
+              )
 
       return rows.map(toMessage)
     },
@@ -265,6 +312,10 @@ export function createServerDatabase() {
     insertMessage(input: Message) {
       insertMessageAndTouchThread(input)
       return input
+    },
+
+    close() {
+      db.close()
     },
   }
 }

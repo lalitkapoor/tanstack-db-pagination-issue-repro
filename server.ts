@@ -28,30 +28,28 @@ function getThreadMessagesPath(pathname: string) {
 }
 
 function scheduleAssistantReply(userMessage: Message) {
-  setTimeout(() => {
-    const reply: Message = {
-      id: crypto.randomUUID(),
-      threadId: userMessage.threadId,
-      role: "assistant",
-      content: `I am a fake reply to: ${userMessage.content}`,
-      createdAt: Date.now(),
-    }
+  const reply: Message = {
+    id: crypto.randomUUID(),
+    threadId: userMessage.threadId,
+    role: "assistant",
+    content: `I am a fake reply to: ${userMessage.content}`,
+    createdAt: Date.now(),
+  }
 
-    database.insertMessage(reply)
+  database.insertMessage(reply)
 
-    const event = JSON.stringify({
-      threadId: userMessage.threadId,
-      message: {
-        id: reply.id,
-        role: reply.role,
-        parts: [{ type: "text", content: reply.content }],
-        createdAt: reply.createdAt,
-      },
-    })
+  const event = JSON.stringify({
+    threadId: userMessage.threadId,
+    message: {
+      id: reply.id,
+      role: reply.role,
+      parts: [{ type: "text", content: reply.content }],
+      createdAt: reply.createdAt,
+    },
+  })
 
-    console.log(`[server] Broadcasting SSE complete event for ${reply.id}`)
-    events.broadcast(`event: complete\ndata: ${event}\n\n`)
-  }, 200)
+  console.log(`[server] Broadcasting SSE complete event for ${reply.id}`)
+  events.broadcast(`event: complete\ndata: ${event}\n\n`)
 }
 
 const server = Bun.serve({
@@ -69,17 +67,30 @@ const server = Bun.serve({
     if (threadMessagesPath && req.method === "GET") {
       const { threadId } = threadMessagesPath
       const limit = Number(url.searchParams.get("limit") || "50")
+      const beforeCreatedAt = url.searchParams.get("beforeCreatedAt")
+      const beforeId = url.searchParams.get("beforeId")
       const before = url.searchParams.get("before")
+
+      const cursor =
+        beforeCreatedAt && beforeId
+          ? {
+              createdAt: Number(beforeCreatedAt),
+              id: beforeId,
+            }
+          : before
+            ? Number(before)
+            : undefined
+
       const result = database.listMessages(
         threadId,
         limit,
-        before ? Number(before) : undefined,
+        cursor,
       )
       const first = result[0]
       const last = result[result.length - 1]
 
       console.log(
-        `[server] GET /api/threads/${threadId}/messages limit=${limit} before=${before ?? "none"} -> ${result.length} msgs` +
+        `[server] GET /api/threads/${threadId}/messages limit=${limit} beforeCreatedAt=${beforeCreatedAt ?? before ?? "none"} beforeId=${beforeId ?? "none"} -> ${result.length} msgs` +
           (first
             ? ` [${first.id} (t=${first.createdAt}) -> ${last.id} (t=${last.createdAt})]`
             : ""),
@@ -115,14 +126,25 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/threads" && req.method === "GET") {
       const limit = Number(url.searchParams.get("limit") || "50")
+      const beforeUpdatedAt = url.searchParams.get("beforeUpdatedAt")
+      const beforeId = url.searchParams.get("beforeId")
       const before = url.searchParams.get("before")
+      const cursor =
+        beforeUpdatedAt && beforeId
+          ? {
+              updatedAt: Number(beforeUpdatedAt),
+              id: beforeId,
+            }
+          : before
+            ? Number(before)
+            : undefined
       const result = database.listThreads(
         limit,
-        before ? Number(before) : undefined,
+        cursor,
       )
 
       console.log(
-        `[server] GET /api/threads limit=${limit} before=${before ?? "none"} -> ${result.length} threads`,
+        `[server] GET /api/threads limit=${limit} beforeUpdatedAt=${beforeUpdatedAt ?? before ?? "none"} beforeId=${beforeId ?? "none"} -> ${result.length} threads`,
       )
 
       return Response.json(result, { headers: corsHeaders })

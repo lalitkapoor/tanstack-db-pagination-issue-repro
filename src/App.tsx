@@ -58,7 +58,11 @@ export function App() {
     fetchNextPage: fetchMoreThreads,
     isFetchingNextPage: isFetchingMoreThreads,
   } = useLiveInfiniteQuery(
-    (q) => q.from({ thread: threads }).orderBy(({ thread }) => thread.updatedAt, "desc"),
+    (q) =>
+      q
+        .from({ thread: threads })
+        .orderBy(({ thread }) => thread.updatedAt, "desc")
+        .orderBy(({ thread }) => thread.id, "desc"),
     { pageSize: 8 },
     [],
   )
@@ -82,7 +86,8 @@ export function App() {
       q
         .from({ message: messages })
         .where(({ message }) => eq(message.threadId, selectedThreadId))
-        .orderBy(({ message }) => message.createdAt, "desc"),
+        .orderBy(({ message }) => message.createdAt, "desc")
+        .orderBy(({ message }) => message.id, "desc"),
     { pageSize: 50 },
     [selectedThreadId],
   )

@@ -1,7 +1,10 @@
 import {
   createCollection,
+  extractFieldPath,
   extractSimpleComparisons,
+  extractValue,
   type LoadSubsetOptions,
+  walkExpression,
 } from "@tanstack/db"
 import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import { queryCollectionOptions } from "@tanstack/query-db-collection"
@@ -23,7 +26,8 @@ type ThreadQueryShape =
     }
   | {
       kind: "list"
-      before?: number
+      beforeUpdatedAt?: number
+      beforeId?: string
       limit: number
     }
 
@@ -35,6 +39,47 @@ export class ThreadsStore {
     private readonly queryClient: QueryClient,
     private readonly databaseContext: DatabaseContext,
   ) {}
+
+  private extractCursorBoundary(
+    expr: LoadSubsetOptions["where"] | undefined,
+  ): {
+    updatedAt?: number
+    id?: string
+  } {
+    const boundary: {
+      updatedAt?: number
+      id?: string
+    } = {}
+
+    walkExpression(expr, (node) => {
+      if (node.type !== "func") {
+        return
+      }
+
+      const [left, right] = node.args
+      const field = left ? extractFieldPath(left) : null
+      const value = right ? extractValue(right) : undefined
+
+      if (
+        (node.name === "eq" ||
+          node.name === "lt" ||
+          node.name === "lte" ||
+          node.name === "gt" ||
+          node.name === "gte") &&
+        field
+      ) {
+        const joinedField = field.join(".")
+        if (joinedField === "updatedAt" && typeof value === "number") {
+          boundary.updatedAt ??= value
+        }
+        if (joinedField === "id" && typeof value === "string") {
+          boundary.id ??= value
+        }
+      }
+    })
+
+    return boundary
+  }
 
   private getQueryShape(opts: LoadSubsetOptions): ThreadQueryShape {
     const comparisons = extractSimpleComparisons(opts.where)
@@ -51,7 +96,8 @@ export class ThreadsStore {
 
     const limit = opts.limit ?? 50
 
-    let before: number | undefined
+    let beforeUpdatedAt: number | undefined
+    let beforeId: string | undefined
     const cursor = (
       opts as LoadSubsetOptions & {
         cursor?: { whereFrom?: LoadSubsetOptions["where"] }
@@ -59,19 +105,22 @@ export class ThreadsStore {
     ).cursor
 
     if (cursor?.whereFrom) {
-      const cursorComparisons = extractSimpleComparisons(cursor.whereFrom)
-      before = cursorComparisons.find(
-        (c) => c.field.join(".") === "updatedAt" && c.operator === "lt",
-      )?.value as number | undefined
+      const boundary = this.extractCursorBoundary(cursor.whereFrom)
+      beforeUpdatedAt = boundary.updatedAt
+      beforeId = boundary.id
     } else {
-      before = comparisons.find(
+      beforeUpdatedAt = comparisons.find(
         (c) => c.field.join(".") === "updatedAt" && c.operator === "lt",
       )?.value as number | undefined
+      beforeId = comparisons.find(
+        (c) => c.field.join(".") === "id" && c.operator === "lt",
+      )?.value as string | undefined
     }
 
     return {
       kind: "list",
-      before,
+      beforeUpdatedAt,
+      beforeId,
       limit,
     }
   }
@@ -94,8 +143,12 @@ export class ThreadsStore {
       limit: String(query.limit),
     })
 
-    if (query.before != null) {
-      params.set("before", String(query.before))
+    if (query.beforeUpdatedAt != null) {
+      params.set("beforeUpdatedAt", String(query.beforeUpdatedAt))
+    }
+
+    if (query.beforeId != null) {
+      params.set("beforeId", query.beforeId)
     }
 
     return fetchJson<Thread[]>(`/api/threads?${params}`)
@@ -109,7 +162,14 @@ export class ThreadsStore {
         if (query.kind === "by-id") {
           return ["db", "threads", "by-id", query.threadId] as const
         }
-        return ["db", "threads", "list", query.before ?? "latest", query.limit] as const
+        return [
+          "db",
+          "threads",
+          "list",
+          query.beforeUpdatedAt ?? "latest",
+          query.beforeId ?? "latest",
+          query.limit,
+        ] as const
       },
       syncMode: "on-demand" as const,
       queryFn: (ctx) => this.fetchThreads(ctx.meta?.loadSubsetOptions ?? {}),
