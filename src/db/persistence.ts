@@ -3,51 +3,49 @@ import {
   createBrowserWASQLitePersistence,
   openBrowserWASQLiteOPFSDatabase,
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
-import type { PersistedCollectionPersistence } from "@tanstack/db-sqlite-persisted-collection-core"
+import type { BrowserWASQLiteDatabase } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 
-type PersistedRow = Record<string, unknown>
-type SharedPersistence = PersistedCollectionPersistence<PersistedRow, string>
+export class DatabaseContext {
+  constructor(
+    private readonly database: BrowserWASQLiteDatabase,
+    private readonly coordinator: BrowserCollectionCoordinator,
+  ) {}
 
-let _persistence: SharedPersistence | null = null
-let _database: Awaited<ReturnType<typeof openBrowserWASQLiteOPFSDatabase>> | null =
+  public createPersistence<T extends object>() {
+    return createBrowserWASQLitePersistence<T, string>({
+      database: this.database,
+      coordinator: this.coordinator,
+    })
+  }
+}
+
+let _databaseContext: DatabaseContext | null = null
+let _sqliteDatabase: Awaited<ReturnType<typeof openBrowserWASQLiteOPFSDatabase>> | null =
   null
+let _coordinator: BrowserCollectionCoordinator | null = null
 
 export async function initPersistence() {
-  if (_persistence) {
-    return _persistence
+  if (_databaseContext) {
+    return _databaseContext
   }
 
-  _database = await openBrowserWASQLiteOPFSDatabase({
+  _sqliteDatabase = await openBrowserWASQLiteOPFSDatabase({
     databaseName: "repro.sqlite",
   })
 
-  const coordinator = new BrowserCollectionCoordinator({ dbName: "repro" })
+  _coordinator = new BrowserCollectionCoordinator({ dbName: "repro" })
+  _databaseContext = new DatabaseContext(_sqliteDatabase, _coordinator)
 
-  _persistence = createBrowserWASQLitePersistence<PersistedRow, string>({
-    database: _database,
-    coordinator,
-  })
-
-  return _persistence
-}
-
-export function getPersistence<T extends object>(): PersistedCollectionPersistence<
-  T,
-  string
-> {
-  if (!_persistence) {
-    throw new Error("Persistence not initialized")
-  }
-
-  return _persistence as PersistedCollectionPersistence<T, string>
+  return _databaseContext
 }
 
 /** Close the SQLite database, delete the OPFS file, and reload the page. */
 export async function resetDatabase() {
-  if (_database) {
-    await _database.close?.()
-    _database = null
-    _persistence = null
+  if (_sqliteDatabase) {
+    await _sqliteDatabase.close?.()
+    _sqliteDatabase = null
+    _databaseContext = null
+    _coordinator = null
   }
 
   try {

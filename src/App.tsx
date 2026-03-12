@@ -1,21 +1,22 @@
 import React, { useRef, useLayoutEffect, useCallback, useEffect } from "react"
 import { useLiveInfiniteQuery, eq } from "@tanstack/react-db"
-import { getMessages, addMessage, addServerMessage, fetchCount, resetDatabase } from "./db"
+import { getDB, resetDatabase } from "./db"
 
 export function App() {
-  const messages = getMessages()
+  const db = getDB()
+  const messages = db.messages.collection
   const [input, setInput] = React.useState("")
-  const [displayFetchCount, setDisplayFetchCount] = React.useState(fetchCount)
+  const [displayFetchCount, setDisplayFetchCount] = React.useState(db.messages.fetchCount)
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevScrollHeightRef = useRef(0)
 
   // Poll fetch count for display
   useEffect(() => {
     const interval = setInterval(() => {
-      setDisplayFetchCount(fetchCount)
+      setDisplayFetchCount(db.messages.fetchCount)
     }, 500)
     return () => clearInterval(interval)
-  }, [])
+  }, [db])
 
   // Messages query — ordered by createdAt desc, paginated
   const { data: rawMessages = [], hasNextPage, fetchNextPage, isFetchingNextPage } = useLiveInfiniteQuery(
@@ -68,7 +69,7 @@ export function App() {
         const data = JSON.parse(event.data)
         const msg = data.message
         console.log("[SSE] complete event received:", msg.id)
-        addServerMessage({
+        db.messages.addServer({
           id: msg.id,
           role: msg.role,
           content: msg.parts[0].content,
@@ -81,14 +82,14 @@ export function App() {
     })
     es.onerror = () => console.warn("[SSE] connection error")
     return () => es.close()
-  }, [])
+  }, [db, messages])
 
   const handleSend = () => {
     const text = input.trim()
     if (!text) return
     setInput("")
     console.log("[App] sending message:", text)
-    addMessage(text)
+    db.messages.add(text)
   }
 
   return (

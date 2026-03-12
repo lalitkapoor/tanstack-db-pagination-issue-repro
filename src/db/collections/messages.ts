@@ -2,164 +2,170 @@ import {
   createCollection,
   extractSimpleComparisons,
   type LoadSubsetOptions,
-} from "@tanstack/db";
-import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection";
-import { queryCollectionOptions } from "@tanstack/query-db-collection";
-import type { QueryClient } from "@tanstack/react-query";
-import { fetchJson, persist } from "../http";
-import { getPersistence } from "../persistence";
+} from "@tanstack/db"
+import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+import { queryCollectionOptions } from "@tanstack/query-db-collection"
+import type { QueryClient } from "@tanstack/react-query"
+import { fetchJson, persist } from "../http"
+import type { DatabaseContext } from "../persistence"
 
-export type Message = {
-  id: string;
-  threadId: string;
-  role: "user" | "assistant";
-  content: string;
-  createdAt: number;
-};
+type Message = {
+  id: string
+  threadId: string
+  role: "user" | "assistant"
+  content: string
+  createdAt: number
+}
 
-export let fetchCount = 0;
+export class MessagesStore {
+  private collectionInstance: ReturnType<MessagesStore["createCollection"]> | null =
+    null
+  private internalFetchCount = 0
 
-let _messages: ReturnType<typeof createMessagesCollection> | null = null;
+  constructor(
+    private readonly queryClient: QueryClient,
+    private readonly databaseContext: DatabaseContext,
+  ) {}
 
-function extractMessageQueryParams(opts: LoadSubsetOptions) {
-  const comparisons = extractSimpleComparisons(opts.where);
-  const threadId = comparisons.find((c) => c.field.join(".") === "threadId")
-    ?.value as string | undefined;
+  private extractQueryParams(opts: LoadSubsetOptions) {
+    const comparisons = extractSimpleComparisons(opts.where)
+    const threadId = comparisons.find((c) => c.field.join(".") === "threadId")
+      ?.value as string | undefined
 
-  let before: number | undefined;
-  const cursor = (
-    opts as LoadSubsetOptions & {
-      cursor?: { whereFrom?: LoadSubsetOptions["where"] };
+    let before: number | undefined
+    const cursor = (
+      opts as LoadSubsetOptions & {
+        cursor?: { whereFrom?: LoadSubsetOptions["where"] }
+      }
+    ).cursor
+
+    if (cursor?.whereFrom) {
+      const cursorComparisons = extractSimpleComparisons(cursor.whereFrom)
+      before = cursorComparisons.find(
+        (c) => c.field.join(".") === "createdAt" && c.operator === "lt",
+      )?.value as number | undefined
+    } else {
+      before = comparisons.find(
+        (c) => c.field.join(".") === "createdAt" && c.operator === "lt",
+      )?.value as number | undefined
     }
-  ).cursor;
 
-  if (cursor?.whereFrom) {
-    const cursorComparisons = extractSimpleComparisons(cursor.whereFrom);
-    before = cursorComparisons.find(
-      (c) => c.field.join(".") === "createdAt" && c.operator === "lt",
-    )?.value as number | undefined;
-  } else {
-    before = comparisons.find(
-      (c) => c.field.join(".") === "createdAt" && c.operator === "lt",
-    )?.value as number | undefined;
+    return { threadId, before }
   }
 
-  return { threadId, before };
-}
+  private async fetchMessages(opts: LoadSubsetOptions = {}) {
+    this.internalFetchCount++
+    const { threadId, before } = this.extractQueryParams(opts)
 
-async function fetchMessages(opts: LoadSubsetOptions = {}) {
-  fetchCount++;
-  const { threadId, before } = extractMessageQueryParams(opts);
+    if (!threadId) {
+      return [] as Message[]
+    }
 
-  if (!threadId) {
-    return [] as Message[];
+    const limit = opts.limit ?? 50
+    const params = new URLSearchParams({
+      threadId,
+      limit: String(limit),
+    })
+
+    if (before != null) {
+      params.set("before", String(before))
+    }
+
+    console.log("[messages queryFn]", {
+      fetchCount: this.internalFetchCount,
+      threadId,
+      before: before ?? "none",
+      limit,
+    })
+
+    return fetchJson<Message[]>(`/api/messages?${params}`)
   }
 
-  const limit = opts.limit ?? 50;
-  const params = new URLSearchParams({
-    threadId,
-    limit: String(limit),
-  });
+  private createCollection() {
+    const queryOpts = queryCollectionOptions({
+      id: "messages",
+      queryKey: (opts: LoadSubsetOptions) => {
+        const { threadId, before } = this.extractQueryParams(opts)
+        return ["db", "messages", threadId ?? null, before ?? "latest"] as const
+      },
+      syncMode: "on-demand" as const,
+      queryFn: (ctx) => this.fetchMessages(ctx.meta?.loadSubsetOptions ?? {}),
+      queryClient: this.queryClient,
+      getKey: (message) => message.id,
+      onInsert: async ({ transaction }) => {
+        for (const mutation of transaction.mutations) {
+          await persist("/api/messages", "POST", mutation.modified)
+        }
 
-  if (before != null) {
-    params.set("before", String(before));
-  }
-
-  console.log("[messages queryFn]", {
-    fetchCount,
-    threadId,
-    before: before ?? "none",
-    limit,
-  });
-
-  return fetchJson<Message[]>(`/api/messages?${params}`);
-}
-
-function createMessagesCollection(queryClient: QueryClient) {
-  const queryOpts = queryCollectionOptions({
-    id: "messages",
-    queryKey: (opts: LoadSubsetOptions) => {
-      const { threadId, before } = extractMessageQueryParams(opts);
-      return ["db", "messages", threadId ?? null, before ?? "latest"] as const;
-    },
-    syncMode: "on-demand" as const,
-    queryFn: (ctx) => fetchMessages(ctx.meta?.loadSubsetOptions ?? {}),
-    queryClient,
-    getKey: (message) => message.id,
-    onInsert: async ({ transaction }) => {
-      for (const mutation of transaction.mutations) {
-        await persist("/api/messages", "POST", mutation.modified);
-      }
-
-      if (_messages) {
-        _messages.utils.writeBatch(() => {
+        this.collection.utils.writeBatch(() => {
           for (const mutation of transaction.mutations) {
-            _messages?.utils.writeInsert(mutation.modified);
+            this.collection.utils.writeInsert(mutation.modified)
           }
-        });
-      }
+        })
 
-      return { refetch: false };
-    },
-  });
+        return { refetch: false }
+      },
+    })
 
-  return createCollection(
-    persistedCollectionOptions<Message, string, never, typeof queryOpts.utils>({
-      ...queryOpts,
-      persistence: getPersistence<Message>(),
-      schemaVersion: 1,
-    }),
-  );
-}
-
-export async function initMessages(queryClient: QueryClient) {
-  if (_messages) {
-    return _messages;
+    return createCollection(
+      persistedCollectionOptions<Message, string, never, typeof queryOpts.utils>({
+        ...queryOpts,
+        persistence: this.databaseContext.createPersistence<Message>(),
+        schemaVersion: 1,
+      }),
+    )
   }
 
-  _messages = createMessagesCollection(queryClient);
-  await _messages.stateWhenReady();
-  return _messages;
-}
+  public async init() {
+    if (this.collectionInstance) {
+      return this.collectionInstance
+    }
 
-export function getMessages() {
-  if (!_messages) {
-    throw new Error("Messages collection not initialized");
+    this.collectionInstance = this.createCollection()
+    await this.collectionInstance.stateWhenReady()
+    return this.collectionInstance
   }
 
-  return _messages;
-}
+  public get collection() {
+    if (!this.collectionInstance) {
+      throw new Error("Messages collection not initialized")
+    }
 
-export function addMessage(content: string, threadId: string = "thread-1") {
-  const collection = getMessages();
-  const id = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return this.collectionInstance
+  }
 
-  collection.insert({
-    id,
-    threadId,
-    role: "user",
-    content,
-    createdAt: Date.now(),
-  });
+  public get fetchCount() {
+    return this.internalFetchCount
+  }
 
-  return id;
-}
+  public add(content: string, threadId: string = "thread-1") {
+    const id = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-/** Insert a message from the server (SSE) into synced state without refetching. */
-export function addServerMessage(msg: {
-  id: string;
-  threadId?: string;
-  role: "user" | "assistant";
-  content: string;
-  createdAt: number;
-}) {
-  const collection = getMessages();
+    this.collection.insert({
+      id,
+      threadId,
+      role: "user",
+      content,
+      createdAt: Date.now(),
+    })
 
-  collection.utils.writeInsert({
-    id: msg.id,
-    threadId: msg.threadId ?? "thread-1",
-    role: msg.role,
-    content: msg.content,
-    createdAt: msg.createdAt,
-  });
+    return id
+  }
+
+  /** Insert a message from the server (SSE) into synced state without refetching. */
+  public addServer(msg: {
+    id: string
+    threadId?: string
+    role: "user" | "assistant"
+    content: string
+    createdAt: number
+  }) {
+    this.collection.utils.writeInsert({
+      id: msg.id,
+      threadId: msg.threadId ?? "thread-1",
+      role: msg.role,
+      content: msg.content,
+      createdAt: msg.createdAt,
+    })
+  }
 }

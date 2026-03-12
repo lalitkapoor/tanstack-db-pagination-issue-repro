@@ -1,27 +1,44 @@
 import type { QueryClient } from "@tanstack/react-query"
-export async function initDB(queryClient: QueryClient) {
-  const [{ initPersistence }, { initMessages }, { initThreads }] = await Promise.all([
-    import("./persistence"),
-    import("./collections/messages"),
-    import("./collections/threads"),
-  ])
+import { initPersistence, resetDatabase, type DatabaseContext } from "./persistence"
+import { MessagesStore } from "./collections/messages"
+import { ThreadsStore } from "./collections/threads"
 
-  await initPersistence()
-  const [messages, threads] = await Promise.all([
-    initMessages(queryClient),
-    initThreads(queryClient),
-  ])
+class AppDB {
+  public readonly messages: MessagesStore
+  public readonly threads: ThreadsStore
 
-  return { messages, threads }
+  constructor(queryClient: QueryClient, databaseContext: DatabaseContext) {
+    this.messages = new MessagesStore(queryClient, databaseContext)
+    this.threads = new ThreadsStore(queryClient, databaseContext)
+  }
+
+  public async init() {
+    await Promise.all([this.messages.init(), this.threads.init()])
+    return this
+  }
 }
 
-export { resetDatabase } from "./persistence"
-export {
-  addMessage,
-  addServerMessage,
-  fetchCount,
-  getMessages,
-  initMessages,
-  type Message,
-} from "./collections/messages"
-export { addThread, getThreads, initThreads, type Thread } from "./collections/threads"
+let _db: AppDB | null = null
+
+export async function initDB(queryClient: QueryClient) {
+  if (_db) {
+    return _db
+  }
+
+  const databaseContext = await initPersistence()
+
+  _db = new AppDB(queryClient, databaseContext)
+  await _db.init()
+
+  return _db
+}
+
+export function getDB() {
+  if (!_db) {
+    throw new Error("DB not initialized")
+  }
+
+  return _db
+}
+
+export { resetDatabase }
