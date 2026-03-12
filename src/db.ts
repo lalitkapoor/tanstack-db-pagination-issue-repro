@@ -1,13 +1,17 @@
 /**
- * TanStack DB collection setup for the repro.
+ * TanStack DB collection setup — Option C with custom queryKey fix.
  *
- * Single "messages" collection using the on-demand pattern from applecart.
- * Demonstrates:
- *  1. writeInsert inside onInsert triggers pipeline cascade
- *  2. Default refetch after onInsert is redundant
+ * Uses queryCollectionOptions + useLiveInfiniteQuery with a custom queryKey
+ * function that ignores limit/offset, preventing the cascade of GETs when
+ * writeInsert is called inside onInsert.
  */
 
-import { createCollection, extractSimpleComparisons, type LoadSubsetOptions } from "@tanstack/db"
+import {
+  createCollection,
+  extractSimpleComparisons,
+  type LoadSubsetOptions,
+  type Collection,
+} from "@tanstack/db"
 import {
   openBrowserWASQLiteOPFSDatabase,
   BrowserCollectionCoordinator,
@@ -32,13 +36,28 @@ export type Message = {
   createdAt: number
 }
 
+type MessageQueryKey = readonly [string, string, string, string | number]
+type MessageUtils = QueryCollectionUtils<Message, string, Message, unknown>
+type MessageCollection = Collection<Message, string, MessageUtils>
+
+interface Mutation {
+  modified: Message
+  key: string
+}
+
+interface InsertTransaction {
+  mutations: Mutation[]
+}
+
 // ---------------------------------------------------------------------------
 // Persistence (wa-sqlite OPFS)
 // ---------------------------------------------------------------------------
 
 let _persistence: ReturnType<typeof createBrowserWASQLitePersistence> | null =
   null
-let _database: Awaited<ReturnType<typeof openBrowserWASQLiteOPFSDatabase>> | null = null
+let _database: Awaited<
+  ReturnType<typeof openBrowserWASQLiteOPFSDatabase>
+> | null = null
 
 async function initPersistence() {
   if (_persistence) return _persistence
@@ -51,7 +70,10 @@ async function initPersistence() {
     dbName: "repro",
   })
 
-  _persistence = createBrowserWASQLitePersistence({ database: _database, coordinator })
+  _persistence = createBrowserWASQLitePersistence({
+    database: _database,
+    coordinator,
+  })
   return _persistence
 }
 
@@ -64,19 +86,21 @@ export async function resetDatabase() {
   }
   try {
     const root = await navigator.storage.getDirectory()
-    for await (const [name] of (root as any).entries()) {
+    for await (const [name] of (root as FileSystemDirectoryHandle &
+      AsyncIterable<[string, FileSystemHandle]>)) {
       if (name.includes("repro")) {
         await root.removeEntry(name, { recursive: true }).catch(() => {})
       }
     }
-  } catch {}
+  } catch {
+    // OPFS not available or already clean
+  }
   location.reload()
 }
 
 function getPersistence() {
   if (!_persistence) throw new Error("Persistence not initialized")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return _persistence as any
+  return _persistence
 }
 
 // ---------------------------------------------------------------------------
@@ -114,12 +138,11 @@ async function persist(
 // Collection
 // ---------------------------------------------------------------------------
 
-type Collections = { messages: ReturnType<typeof createMessagesCollection> }
-let _collections: Collections | null = null
+let _messages: MessageCollection | null = null
 
 /**
  * Extract the meaningful params from loadSubsetOptions for cache key generation.
- * Returns [threadId, before] — ignoring limit/offset so that the pipeline's
+ * Returns { threadId, before } — ignoring limit/offset so that the pipeline's
  * varying window sizes don't create separate cache entries.
  */
 function extractKeyParams(opts: LoadSubsetOptions) {
@@ -130,13 +153,9 @@ function extractKeyParams(opts: LoadSubsetOptions) {
 
   // Check cursor first (from useLiveInfiniteQuery), then where clause
   let before: string | number | undefined
-  const cursor = (opts as Record<string, unknown>)?.cursor as
-    | { whereFrom?: unknown }
-    | undefined
+  const cursor = (opts as LoadSubsetOptions & { cursor?: { whereFrom?: LoadSubsetOptions["where"] } }).cursor
   if (cursor?.whereFrom) {
-    const cursorComparisons = extractSimpleComparisons(
-      cursor.whereFrom as LoadSubsetOptions["where"]
-    )
+    const cursorComparisons = extractSimpleComparisons(cursor.whereFrom)
     before = cursorComparisons.find(
       (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
     )?.value as string | number | undefined
@@ -149,27 +168,32 @@ function extractKeyParams(opts: LoadSubsetOptions) {
   return { threadId, before }
 }
 
-function createMessagesCollection(queryClient: QueryClient) {
+function createMessagesCollection(queryClient: QueryClient): MessageCollection {
   const persistence = getPersistence()
 
-  type TUtils = QueryCollectionUtils<Message, string, Message, unknown>
-
-  const queryOpts = queryCollectionOptions({
+  // queryCollectionOptions generic inference struggles with function-based queryKey,
+  // so we type the config explicitly and cast the result.
+  const queryOpts = queryCollectionOptions<Message, unknown, MessageQueryKey, string>({
     id: "messages",
     // Custom queryKey function: stable per thread+cursor, ignores limit/offset.
     // This prevents the pipeline's varying window sizes from creating separate
     // cache entries → no cascade of GETs with different limits.
-    queryKey: (opts: LoadSubsetOptions) => {
+    queryKey: (opts: LoadSubsetOptions): MessageQueryKey => {
       const { threadId, before } = extractKeyParams(opts)
       return ["db", "messages", threadId ?? "none", before ?? "latest"] as const
     },
     syncMode: "on-demand" as const,
     staleTime: Infinity,
-    queryFn: async (ctx: { meta?: { loadSubsetOptions?: LoadSubsetOptions } }) => {
+    queryFn: (ctx) => {
       fetchCount++
-      const opts = ctx.meta?.loadSubsetOptions
+      const opts = (ctx.meta as { loadSubsetOptions?: LoadSubsetOptions })
+        ?.loadSubsetOptions
       const { threadId, before } = extractKeyParams(opts ?? {})
-      console.log("[queryFn]", { fetchCount, threadId, before: before ?? "none" })
+      console.log("[queryFn]", {
+        fetchCount,
+        threadId,
+        before: before ?? "none",
+      })
 
       if (!threadId) return []
 
@@ -184,31 +208,31 @@ function createMessagesCollection(queryClient: QueryClient) {
     },
     queryClient,
     getKey: (m: Message) => m.id,
-    onInsert: async ({ transaction }: { transaction: { mutations: Array<{ modified: unknown; key: string }> } }) => {
+    onInsert: async ({ transaction }: { transaction: InsertTransaction }) => {
       for (const m of transaction.mutations) {
-        const msg = m.modified as Message
-        await persist(`/api/messages`, "POST", msg)
+        await persist(`/api/messages`, "POST", m.modified)
       }
       // writeInsert lands the row in synced state so it survives optimistic clear.
       // refetch: false skips the redundant refetch.
       // Custom queryKey prevents the cascade (limit/offset changes hit same cache entry).
-      const c = _collections!.messages
-      for (const m of transaction.mutations) {
-        c.utils.writeInsert(m.modified as Message)
+      if (_messages) {
+        for (const m of transaction.mutations) {
+          _messages.utils.writeInsert(m.modified)
+        }
       }
       return { refetch: false }
     },
     onUpdate: () => {},
     onDelete: () => {},
-  } as unknown as Parameters<typeof queryCollectionOptions>[0])
+  } as Parameters<typeof queryCollectionOptions<Message, unknown, MessageQueryKey, string>>[0])
 
   return createCollection(
-    persistedCollectionOptions<Message, string, never, TUtils>({
-      ...(queryOpts as any),
+    persistedCollectionOptions<Message, string, never, MessageUtils>({
+      ...queryOpts,
       persistence,
       schemaVersion: 1,
-    })
-  )
+    } as Parameters<typeof persistedCollectionOptions<Message, string, never, MessageUtils>>[0])
+  ) as MessageCollection
 }
 
 // ---------------------------------------------------------------------------
@@ -216,17 +240,16 @@ function createMessagesCollection(queryClient: QueryClient) {
 // ---------------------------------------------------------------------------
 
 export async function initDB(queryClient: QueryClient) {
-  if (_collections) return _collections
+  if (_messages) return _messages
   await initPersistence()
-  const messages = createMessagesCollection(queryClient)
-  _collections = { messages }
-  await (messages as any).stateWhenReady()
-  return _collections
+  _messages = createMessagesCollection(queryClient)
+  await _messages.stateWhenReady()
+  return _messages
 }
 
-export function getMessages() {
-  if (!_collections) throw new Error("DB not initialized")
-  return _collections.messages
+export function getMessages(): MessageCollection {
+  if (!_messages) throw new Error("DB not initialized")
+  return _messages
 }
 
 /** Optimistically insert a user message. Triggers onInsert → POST to server. */
