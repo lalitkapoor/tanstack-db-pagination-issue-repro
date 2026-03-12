@@ -1,4 +1,8 @@
-import { createCollection } from "@tanstack/db"
+import {
+  createCollection,
+  extractSimpleComparisons,
+  type LoadSubsetOptions,
+} from "@tanstack/db"
 import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import { queryCollectionOptions } from "@tanstack/query-db-collection"
 import type { QueryClient } from "@tanstack/react-query"
@@ -21,15 +25,53 @@ export class ThreadsStore {
     private readonly databaseContext: DatabaseContext,
   ) {}
 
-  private async fetchThreads() {
-    return fetchJson<Thread[]>("/api/threads")
+  private extractQueryParams(opts: LoadSubsetOptions) {
+    const comparisons = extractSimpleComparisons(opts.where)
+    const limit = opts.limit ?? 50
+
+    let before: number | undefined
+    const cursor = (
+      opts as LoadSubsetOptions & {
+        cursor?: { whereFrom?: LoadSubsetOptions["where"] }
+      }
+    ).cursor
+
+    if (cursor?.whereFrom) {
+      const cursorComparisons = extractSimpleComparisons(cursor.whereFrom)
+      before = cursorComparisons.find(
+        (c) => c.field.join(".") === "updatedAt" && c.operator === "lt",
+      )?.value as number | undefined
+    } else {
+      before = comparisons.find(
+        (c) => c.field.join(".") === "updatedAt" && c.operator === "lt",
+      )?.value as number | undefined
+    }
+
+    return { before, limit }
+  }
+
+  private async fetchThreads(opts: LoadSubsetOptions = {}) {
+    const { before, limit } = this.extractQueryParams(opts)
+    const params = new URLSearchParams({
+      limit: String(limit),
+    })
+
+    if (before != null) {
+      params.set("before", String(before))
+    }
+
+    return fetchJson<Thread[]>(`/api/threads?${params}`)
   }
 
   private createCollection() {
     const queryOpts = queryCollectionOptions({
       id: "threads",
-      queryKey: ["db", "threads"] as const,
-      queryFn: () => this.fetchThreads(),
+      queryKey: (opts: LoadSubsetOptions) => {
+        const { before, limit } = this.extractQueryParams(opts)
+        return ["db", "threads", before ?? "latest", limit] as const
+      },
+      syncMode: "on-demand" as const,
+      queryFn: (ctx) => this.fetchThreads(ctx.meta?.loadSubsetOptions ?? {}),
       queryClient: this.queryClient,
       getKey: (thread) => thread.id,
       onInsert: async ({ transaction }) => {

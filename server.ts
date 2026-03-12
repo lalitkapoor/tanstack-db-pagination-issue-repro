@@ -143,8 +143,19 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/api/threads" && req.method === "GET") {
-      const result = [...threads].sort((a, b) => b.updatedAt - a.updatedAt)
-      console.log(`[server] GET /api/threads → ${result.length} threads`)
+      const limit = Number(url.searchParams.get("limit") || "50")
+      const before = url.searchParams.get("before")
+
+      let filtered = [...threads].sort((a, b) => b.updatedAt - a.updatedAt)
+
+      if (before) {
+        filtered = filtered.filter((thread) => thread.updatedAt < Number(before))
+      }
+
+      const result = filtered.slice(0, limit)
+      console.log(
+        `[server] GET /api/threads limit=${limit} before=${before ?? "none"} → ${result.length} threads`,
+      )
       return Response.json(result, { headers: corsHeaders })
     }
 

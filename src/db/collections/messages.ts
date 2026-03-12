@@ -31,6 +31,7 @@ export class MessagesStore {
     const comparisons = extractSimpleComparisons(opts.where)
     const threadId = comparisons.find((c) => c.field.join(".") === "threadId")
       ?.value as string | undefined
+    const limit = opts.limit ?? 50
 
     let before: number | undefined
     const cursor = (
@@ -50,18 +51,17 @@ export class MessagesStore {
       )?.value as number | undefined
     }
 
-    return { threadId, before }
+    return { threadId, before, limit }
   }
 
   private async fetchMessages(opts: LoadSubsetOptions = {}) {
     this.internalFetchCount++
-    const { threadId, before } = this.extractQueryParams(opts)
+    const { threadId, before, limit } = this.extractQueryParams(opts)
 
     if (!threadId) {
       return [] as Message[]
     }
 
-    const limit = opts.limit ?? 50
     const params = new URLSearchParams({
       threadId,
       limit: String(limit),
@@ -85,8 +85,8 @@ export class MessagesStore {
     const queryOpts = queryCollectionOptions({
       id: "messages",
       queryKey: (opts: LoadSubsetOptions) => {
-        const { threadId, before } = this.extractQueryParams(opts)
-        return ["db", "messages", threadId ?? null, before ?? "latest"] as const
+        const { threadId, before, limit } = this.extractQueryParams(opts)
+        return ["db", "messages", threadId ?? null, before ?? "latest", limit] as const
       },
       syncMode: "on-demand" as const,
       queryFn: (ctx) => this.fetchMessages(ctx.meta?.loadSubsetOptions ?? {}),
