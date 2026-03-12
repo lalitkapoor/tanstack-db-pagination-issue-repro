@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { SEEDED_THREAD_ID } from "@/shared/seed"
 
 function formatTimestamp(value: number) {
   return new Date(value).toLocaleString([], {
@@ -36,8 +37,8 @@ export function App() {
   const db = getDB()
   const threads = db.threads.collection
   const messages = db.messages.collection
-  const [selectedThreadId, setSelectedThreadId] = React.useState("thread-1")
-  const [threadLookupId, setThreadLookupId] = React.useState("thread-1")
+  const [selectedThreadId, setSelectedThreadId] = React.useState(SEEDED_THREAD_ID)
+  const [threadLookupId, setThreadLookupId] = React.useState(SEEDED_THREAD_ID)
   const [newThreadTitle, setNewThreadTitle] = React.useState("")
   const [messageInput, setMessageInput] = React.useState("")
   const [displayFetchCount, setDisplayFetchCount] = React.useState(db.messages.fetchCount)
@@ -253,7 +254,7 @@ export function App() {
                   </div>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="thread-1"
+                      placeholder={SEEDED_THREAD_ID}
                       value={threadLookupId}
                       onChange={(event) => setThreadLookupId(event.target.value)}
                       onKeyDown={(event) => {

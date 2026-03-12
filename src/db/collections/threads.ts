@@ -134,7 +134,7 @@ export class ThreadsStore {
       persistedCollectionOptions<Thread, string, never, typeof queryOpts.utils>({
         ...queryOpts,
         persistence: this.databaseContext.createPersistence<Thread>(),
-        schemaVersion: 1,
+        schemaVersion: 2,
       }),
     )
   }
@@ -158,7 +158,7 @@ export class ThreadsStore {
 
   public add(title: string) {
     const now = Date.now()
-    const id = `thread-${now}-${Math.random().toString(36).slice(2, 8)}`
+    const id = crypto.randomUUID()
 
     this.collection.insert({
       id,
