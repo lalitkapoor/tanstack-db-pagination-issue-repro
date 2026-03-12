@@ -7,7 +7,7 @@
  *  2. Default refetch after onInsert is redundant
  */
 
-import { createCollection, extractSimpleComparisons } from "@tanstack/db"
+import { createCollection, extractSimpleComparisons, type LoadSubsetOptions } from "@tanstack/db"
 import {
   openBrowserWASQLiteOPFSDatabase,
   BrowserCollectionCoordinator,
@@ -117,6 +117,38 @@ async function persist(
 type Collections = { messages: ReturnType<typeof createMessagesCollection> }
 let _collections: Collections | null = null
 
+/**
+ * Extract the meaningful params from loadSubsetOptions for cache key generation.
+ * Returns [threadId, before] — ignoring limit/offset so that the pipeline's
+ * varying window sizes don't create separate cache entries.
+ */
+function extractKeyParams(opts: LoadSubsetOptions) {
+  const comparisons = extractSimpleComparisons(opts?.where)
+  const threadId = comparisons.find(
+    (c) => c.field.join(".") === "threadId"
+  )?.value as string | undefined
+
+  // Check cursor first (from useLiveInfiniteQuery), then where clause
+  let before: string | number | undefined
+  const cursor = (opts as Record<string, unknown>)?.cursor as
+    | { whereFrom?: unknown }
+    | undefined
+  if (cursor?.whereFrom) {
+    const cursorComparisons = extractSimpleComparisons(
+      cursor.whereFrom as LoadSubsetOptions["where"]
+    )
+    before = cursorComparisons.find(
+      (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
+    )?.value as string | number | undefined
+  } else {
+    before = comparisons.find(
+      (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
+    )?.value as string | number | undefined
+  }
+
+  return { threadId, before }
+}
+
 function createMessagesCollection(queryClient: QueryClient) {
   const persistence = getPersistence()
 
@@ -124,45 +156,27 @@ function createMessagesCollection(queryClient: QueryClient) {
 
   const queryOpts = queryCollectionOptions({
     id: "messages",
-    queryKey: ["db", "messages"] as const,
+    // Custom queryKey function: stable per thread+cursor, ignores limit/offset.
+    // This prevents the pipeline's varying window sizes from creating separate
+    // cache entries → no cascade of GETs with different limits.
+    queryKey: (opts: LoadSubsetOptions) => {
+      const { threadId, before } = extractKeyParams(opts)
+      return ["db", "messages", threadId ?? "none", before ?? "latest"] as const
+    },
     syncMode: "on-demand" as const,
     staleTime: Infinity,
-    queryFn: async (ctx: any) => {
+    queryFn: async (ctx: { meta?: { loadSubsetOptions?: LoadSubsetOptions } }) => {
       fetchCount++
       const opts = ctx.meta?.loadSubsetOptions
-      console.log("[queryFn]", {
-        fetchCount,
-        limit: opts?.limit,
-        offset: opts?.offset,
-        cursor: !!opts?.cursor,
-      })
+      const { threadId, before } = extractKeyParams(opts ?? {})
+      console.log("[queryFn]", { fetchCount, threadId, before: before ?? "none" })
 
-      const comparisons = extractSimpleComparisons(opts?.where)
-      const threadIdMatch = comparisons.find(
-        (c) => c.field.join(".") === "threadId"
-      )
-      if (!threadIdMatch?.value) return []
+      if (!threadId) return []
 
       const limit = opts?.limit ?? 50
       const params = new URLSearchParams({ limit: String(limit) })
-
-      // Cursor from useLiveInfiniteQuery pagination
-      const cursor = opts?.cursor
-      if (cursor?.whereFrom) {
-        const cursorComparisons = extractSimpleComparisons(cursor.whereFrom)
-        const beforeCursor = cursorComparisons.find(
-          (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
-        )
-        if (beforeCursor?.value != null) {
-          params.set("before", String(beforeCursor.value))
-        }
-      } else {
-        const beforeMatch = comparisons.find(
-          (c) => c.field.join(".") === "createdAt" && c.operator === "lt"
-        )
-        if (beforeMatch?.value != null) {
-          params.set("before", String(beforeMatch.value))
-        }
+      if (before != null) {
+        params.set("before", String(before))
       }
 
       console.log(`[queryFn] → GET /api/messages?${params}`)
@@ -170,21 +184,14 @@ function createMessagesCollection(queryClient: QueryClient) {
     },
     queryClient,
     getKey: (m: Message) => m.id,
-    onInsert: async ({ transaction }: any) => {
+    onInsert: async ({ transaction }: { transaction: { mutations: Array<{ modified: unknown; key: string }> } }) => {
       for (const m of transaction.mutations) {
         const msg = m.modified as Message
         await persist(`/api/messages`, "POST", msg)
       }
-
-      // PROBLEM: When onInsert completes, the optimistic row is removed.
-      // The row must exist in synced state to stay visible.
-      //
-      // writeInsert + refetch: false works with 1 page loaded. But after
-      // loading older pages via useLiveInfiniteQuery, writeInsert inside
-      // onInsert triggers repeated GETs with varying limits.
-      //
-      // See README.md for the full problem description and alternative options.
-
+      // writeInsert lands the row in synced state so it survives optimistic clear.
+      // refetch: false skips the redundant refetch.
+      // Custom queryKey prevents the cascade (limit/offset changes hit same cache entry).
       const c = _collections!.messages
       for (const m of transaction.mutations) {
         c.utils.writeInsert(m.modified as Message)
@@ -193,7 +200,7 @@ function createMessagesCollection(queryClient: QueryClient) {
     },
     onUpdate: () => {},
     onDelete: () => {},
-  } as any)
+  } as unknown as Parameters<typeof queryCollectionOptions>[0])
 
   return createCollection(
     persistedCollectionOptions<Message, string, never, TUtils>({
@@ -237,12 +244,8 @@ export function addMessage(content: string) {
 }
 
 /**
- * Insert a message that came FROM the server (SSE).
- * Uses writeInsert to write directly into synced state —
- * no onInsert fires, no server persist.
- *
- * THIS IS ISSUE 1: writeInsert triggers the orderBy pipeline's
- * loadMoreIfNeeded → requestLimitedSnapshot cascade.
+ * Insert a message from the server (SSE).
+ * writeInsert → synced state, no onInsert, no fetch.
  */
 export function addServerMessage(msg: {
   id: string
