@@ -1,20 +1,15 @@
 import {
-  BrowserCollectionCoordinator,
   createBrowserWASQLitePersistence,
   openBrowserWASQLiteOPFSDatabase,
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import type { BrowserWASQLiteDatabase } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 
 export class DatabaseContext {
-  constructor(
-    private readonly database: BrowserWASQLiteDatabase,
-    private readonly coordinator: BrowserCollectionCoordinator,
-  ) {}
+  constructor(private readonly database: BrowserWASQLiteDatabase) {}
 
   public createPersistence<T extends object>() {
     return createBrowserWASQLitePersistence<T, string>({
       database: this.database,
-      coordinator: this.coordinator,
     })
   }
 }
@@ -22,7 +17,6 @@ export class DatabaseContext {
 let _databaseContext: DatabaseContext | null = null
 let _sqliteDatabase: Awaited<ReturnType<typeof openBrowserWASQLiteOPFSDatabase>> | null =
   null
-let _coordinator: BrowserCollectionCoordinator | null = null
 
 export async function initPersistence() {
   if (_databaseContext) {
@@ -33,8 +27,7 @@ export async function initPersistence() {
     databaseName: "repro.sqlite",
   })
 
-  _coordinator = new BrowserCollectionCoordinator({ dbName: "repro" })
-  _databaseContext = new DatabaseContext(_sqliteDatabase, _coordinator)
+  _databaseContext = new DatabaseContext(_sqliteDatabase)
 
   return _databaseContext
 }
@@ -45,7 +38,6 @@ export async function resetDatabase() {
     await _sqliteDatabase.close?.()
     _sqliteDatabase = null
     _databaseContext = null
-    _coordinator = null
   }
 
   try {
