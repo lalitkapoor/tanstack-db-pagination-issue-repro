@@ -7,13 +7,8 @@
 
 :root {
   color: #0f172a;
-  background:
-    radial-gradient(circle at top left, rgba(191, 219, 254, 0.45), transparent 34%),
-    radial-gradient(circle at top right, rgba(254, 215, 170, 0.4), transparent 28%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   font-family:
-    "Instrument Sans",
-    "Inter",
+    "Inter Variable",
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -57,6 +52,8 @@
 body {
   min-height: 100vh;
   margin: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 1) 100%);
 }
 
 #root {

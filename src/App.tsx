@@ -2,17 +2,24 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 
 import { eq, useLiveInfiniteQuery, useLiveQuery } from "@tanstack/react-db"
 import {
   ArrowDown,
-  ChevronUp,
+  ArrowUp,
   LoaderCircle,
   MessageSquare,
   Plus,
-  Search,
   RefreshCcw,
+  Search,
 } from "lucide-react"
 import { getDB, resetDatabase } from "./db"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -80,16 +87,14 @@ export function App() {
   )
 
   useEffect(() => {
-    if (rawThreads.length === 0) {
+    if (rawThreads.length === 0 || selectedThreadId) {
       return
     }
 
-    if (!selectedThreadId) {
-      const nextThreadId = rawThreads[0]?.id
-      if (nextThreadId) {
-        setSelectedThreadId(nextThreadId)
-        setThreadLookupId(nextThreadId)
-      }
+    const nextThreadId = rawThreads[0]?.id
+    if (nextThreadId) {
+      setSelectedThreadId(nextThreadId)
+      setThreadLookupId(nextThreadId)
     }
   }, [rawThreads, selectedThreadId])
 
@@ -180,100 +185,101 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
-        <Card className="overflow-hidden border-white/80 bg-white/80">
-          <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-2">
-              <Badge variant="accent" className="w-fit">
+    <div className="box-border h-dvh overflow-hidden bg-background px-3 py-3 text-foreground sm:px-4 lg:px-6">
+      <div className="mx-auto flex h-full min-h-0 max-w-7xl flex-col gap-3">
+        <Card className="border border-border/60 shadow-none">
+          <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div className="space-y-1">
+              <Badge variant="outline" className="w-fit">
                 TanStack DB Testbed
               </Badge>
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Threads + Messages Repro</h1>
-                <p className="text-sm text-slate-600">
-                  Exercises paginated thread lists, single-thread fetches by id, and nested
-                  thread-scoped message routes.
-                </p>
-              </div>
+              <CardTitle className="text-lg">Threads + Messages Repro</CardTitle>
+              <CardDescription className="max-w-2xl">
+                Exercises paginated thread lists, selected thread detail fetches, and nested
+                thread-scoped message routes.
+              </CardDescription>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
-                <div className="font-medium text-slate-900">Message fetches</div>
-                <div>{displayFetchCount}</div>
-              </div>
-              <Button variant="secondary" onClick={() => resetDatabase()}>
-                <RefreshCcw className="h-4 w-4" />
+            <CardAction className="flex items-center gap-2">
+              <Badge variant="secondary" className="h-7 px-2.5 text-[0.625rem]">
+                fetches {displayFetchCount}
+              </Badge>
+              <Button variant="outline" onClick={() => resetDatabase()}>
+                <RefreshCcw />
                 Reset SQLite
               </Button>
-            </div>
-          </CardContent>
+            </CardAction>
+          </CardHeader>
         </Card>
 
-        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle>Threads</CardTitle>
-              <CardDescription>
-                The list below pages through <code>/api/threads</code>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-3">
-                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Create thread
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Quarterly planning"
-                    value={newThreadTitle}
-                    onChange={(event) => setNewThreadTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        handleCreateThread()
-                      }
-                    }}
-                  />
-                  <Button size="icon" onClick={handleCreateThread}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Load thread by id
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="thread-1"
-                    value={threadLookupId}
-                    onChange={(event) => setThreadLookupId(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        handleLoadThreadById()
-                      }
-                    }}
-                  />
-                  <Button variant="secondary" size="icon" onClick={handleLoadThreadById}>
-                    <Search className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-500">
-                  This exercises the <code>/api/threads/:id</code> route through the selected
-                  thread detail query.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Thread list
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
+          <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
+            <Card className="border border-border/60 shadow-none" size="sm">
+              <CardHeader>
+                <CardTitle>Thread Controls</CardTitle>
+                <CardDescription>
+                  Real DB-backed actions for thread creation and direct id lookup.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                  <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Create thread
                   </div>
-                  <Badge variant="secondary">{rawThreads.length} loaded</Badge>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Quarterly planning"
+                      value={newThreadTitle}
+                      onChange={(event) => setNewThreadTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleCreateThread()
+                        }
+                      }}
+                    />
+                    <Button size="icon" onClick={handleCreateThread}>
+                      <Plus />
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="max-h-[28rem] space-y-2 overflow-auto pr-1">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Load by id
+                    </div>
+                    <div className="text-[0.7rem] text-muted-foreground">
+                      Exercises `/api/threads/:id`
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="thread-1"
+                      value={threadLookupId}
+                      onChange={(event) => setThreadLookupId(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleLoadThreadById()
+                        }
+                      }}
+                    />
+                    <Button variant="outline" size="icon" onClick={handleLoadThreadById}>
+                      <Search />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="min-h-0 border border-border/60 shadow-none" size="sm">
+              <CardHeader>
+                <CardTitle>Threads</CardTitle>
+                <CardAction>
+                  <Badge variant="secondary">{rawThreads.length} loaded</Badge>
+                </CardAction>
+                <CardDescription>Paginated from `/api/threads` and ordered by `updatedAt`.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-2">
+                <div className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
                   {rawThreads.map((thread) => {
                     const isSelected = thread.id === selectedThreadId
                     return (
@@ -285,20 +291,18 @@ export function App() {
                           setThreadLookupId(thread.id)
                         }}
                         className={[
-                          "w-full rounded-2xl border px-4 py-3 text-left transition",
+                          "w-full rounded-md border px-3 py-2 text-left transition-colors",
                           isSelected
-                            ? "border-sky-400 bg-sky-50 shadow-sm"
-                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                            ? "border-primary/40 bg-accent text-accent-foreground"
+                            : "border-border bg-background hover:bg-muted/60",
                         ].join(" ")}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-slate-900">
-                              {thread.title}
-                            </div>
-                            <div className="truncate text-xs text-slate-500">{thread.id}</div>
+                            <div className="truncate text-sm font-medium">{thread.title}</div>
+                            <div className="truncate text-xs text-muted-foreground">{thread.id}</div>
                           </div>
-                          <Badge variant={isSelected ? "accent" : "secondary"}>
+                          <Badge variant={isSelected ? "default" : "secondary"}>
                             {formatTimestamp(thread.updatedAt)}
                           </Badge>
                         </div>
@@ -306,7 +310,6 @@ export function App() {
                     )
                   })}
                 </div>
-
                 {hasMoreThreads && (
                   <Button
                     variant="outline"
@@ -314,70 +317,72 @@ export function App() {
                     onClick={() => fetchMoreThreads?.()}
                     disabled={isFetchingMoreThreads}
                   >
-                    {isFetchingMoreThreads ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ChevronUp className="h-4 w-4" />
-                    )}
+                    {isFetchingMoreThreads ? <LoaderCircle className="animate-spin" /> : <ArrowDown />}
                     Load older threads
                   </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          <div className="grid gap-4">
-            <Card className="overflow-hidden">
-              <CardHeader className="border-b border-slate-100 bg-white/60">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle>{selectedThread?.title ?? "Unknown thread"}</CardTitle>
-                      <Badge variant="accent">selected via /api/threads/:id</Badge>
-                    </div>
-                    <CardDescription className="max-w-2xl">
-                      {selectedThread
-                        ? `Thread ${selectedThread.id} was last updated ${formatTimestamp(selectedThread.updatedAt)}.`
-                        : `No thread was found for ${selectedThreadId}.`}
-                    </CardDescription>
+          <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)_auto]">
+            <Card className="border border-border/60 shadow-none" size="sm">
+              <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CardTitle>{selectedThread?.title ?? "Unknown thread"}</CardTitle>
+                    <Badge variant="outline">detail query</Badge>
                   </div>
-
-                  <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-slate-100 px-4 py-3">
-                      <div className="text-xs uppercase tracking-[0.14em] text-slate-500">
-                        Current route
-                      </div>
-                      <div className="font-medium text-slate-900">
-                        /api/threads/{selectedThreadId}/messages
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-100 px-4 py-3">
-                      <div className="text-xs uppercase tracking-[0.14em] text-slate-500">
-                        Loaded messages
-                      </div>
-                      <div className="font-medium text-slate-900">{rawMessages.length}</div>
-                    </div>
-                  </div>
+                  <CardDescription>
+                    {selectedThread
+                      ? `Thread ${selectedThread.id} was last updated ${formatTimestamp(selectedThread.updatedAt)}.`
+                      : `No thread was found for ${selectedThreadId}.`}
+                  </CardDescription>
                 </div>
+                <CardAction className="grid gap-2 sm:grid-cols-2">
+                  <Card size="sm" className="min-w-44 border border-border/60 bg-muted/20 shadow-none">
+                    <CardHeader>
+                      <CardTitle>Current route</CardTitle>
+                    </CardHeader>
+                    <CardContent className="font-mono text-[0.7rem] text-muted-foreground">
+                      /api/threads/{selectedThreadId}/messages
+                    </CardContent>
+                  </Card>
+                  <Card size="sm" className="min-w-32 border border-border/60 bg-muted/20 shadow-none">
+                    <CardHeader>
+                      <CardTitle>Loaded messages</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm font-medium">{rawMessages.length}</CardContent>
+                  </Card>
+                </CardAction>
               </CardHeader>
+            </Card>
 
-              <CardContent className="grid gap-4 p-4">
+            <Card className="min-h-0 border border-border/60 shadow-none">
+              <CardHeader>
+                <CardTitle>Messages</CardTitle>
+                <CardDescription>
+                  Infinite query scoped to the selected thread. Older pages load above the current
+                  transcript.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex min-h-0 flex-1 flex-col">
                 <div
                   ref={scrollRef}
-                  className="flex h-[28rem] flex-col gap-3 overflow-auto rounded-3xl bg-slate-950/95 p-4 shadow-inner shadow-slate-950/20"
+                  className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto rounded-md border border-border bg-muted/15 p-3"
                 >
                   {hasMoreMessages && (
                     <div className="flex justify-center">
                       <Button
-                        variant="secondary"
+                        variant="outline"
                         size="sm"
                         onClick={loadOlderMessages}
                         disabled={isFetchingOlderMessages}
                       >
                         {isFetchingOlderMessages ? (
-                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                          <LoaderCircle className="animate-spin" />
                         ) : (
-                          <ArrowDown className="h-4 w-4" />
+                          <ArrowUp />
                         )}
                         Load older messages
                       </Button>
@@ -385,54 +390,70 @@ export function App() {
                   )}
 
                   {sortedMessages.length === 0 ? (
-                    <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/70 p-6 text-center text-sm text-slate-400">
-                      No messages loaded for this thread yet.
-                    </div>
+                    <Card size="sm" className="border border-dashed border-border/80 bg-background shadow-none">
+                      <CardContent className="py-6 text-center text-xs text-muted-foreground">
+                        No messages loaded for this thread yet.
+                      </CardContent>
+                    </Card>
                   ) : (
                     sortedMessages.map((message) => (
                       <div
                         key={message.id}
                         className={[
-                          "max-w-[85%] rounded-3xl px-4 py-3 text-sm shadow-lg shadow-slate-950/10",
+                          "max-w-[82%] rounded-lg border px-4 py-3 shadow-sm",
                           message.role === "user"
-                            ? "ml-auto bg-sky-400 text-sky-950"
-                            : "mr-auto border border-slate-700 bg-slate-900 text-slate-100",
+                            ? "ml-auto border-slate-300 bg-slate-100 text-slate-950"
+                            : "mr-auto border-slate-200 bg-white text-slate-900",
                         ].join(" ")}
                       >
-                        <div className="mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] opacity-70">
+                        <div
+                          className={[
+                            "flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.14em]",
+                            message.role === "user"
+                              ? "text-slate-500"
+                              : "text-slate-500",
+                          ].join(" ")}
+                        >
                           <span>{message.role}</span>
                           <span>{formatTimestamp(message.createdAt)}</span>
                         </div>
-                        <div className="whitespace-pre-wrap">{message.content}</div>
+                        <div className="mt-1 text-sm leading-6 whitespace-pre-wrap">
+                          {message.content}
+                        </div>
                       </div>
                     ))
                   )}
                 </div>
+              </CardContent>
+            </Card>
 
-                <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900">
-                    <MessageSquare className="h-4 w-4" />
-                    Send a message to {selectedThread?.title ?? selectedThreadId}
+            <Card className="border border-border/60 shadow-none" size="sm">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="size-4 text-muted-foreground" />
+                  <CardTitle>Composer</CardTitle>
+                </div>
+                <CardDescription>
+                  Posts to `/api/threads/{selectedThreadId}/messages`.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <Textarea
+                  placeholder="Type a message to create server activity for this thread..."
+                  value={messageInput}
+                  onChange={(event) => setMessageInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      handleSend()
+                    }
+                  }}
+                  className="min-h-28"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs text-muted-foreground">
+                    Cmd/Ctrl + Enter sends the message.
                   </div>
-                  <div className="grid gap-3">
-                    <Textarea
-                      placeholder="Type a message to create server activity for this thread..."
-                      value={messageInput}
-                      onChange={(event) => setMessageInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                          handleSend()
-                        }
-                      }}
-                      className="min-h-28"
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs text-slate-500">
-                        Messages post to <code>/api/threads/{selectedThreadId}/messages</code>.
-                      </p>
-                      <Button onClick={handleSend}>Send message</Button>
-                    </div>
-                  </div>
+                  <Button onClick={handleSend}>Send message</Button>
                 </div>
               </CardContent>
             </Card>
