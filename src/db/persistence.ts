@@ -2,15 +2,26 @@ import {
   createBrowserWASQLitePersistence,
   openBrowserWASQLiteOPFSDatabase,
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
-import type { BrowserWASQLiteDatabase } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+import type {
+  BrowserWASQLiteDatabase,
+  PersistedCollectionPersistence,
+} from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+
+type PersistedRow = Record<string, unknown>
 
 export class DatabaseContext {
-  constructor(private readonly database: BrowserWASQLiteDatabase) {}
+  private readonly persistence: PersistedCollectionPersistence<PersistedRow, string>
 
-  public createPersistence<T extends object>() {
-    return createBrowserWASQLitePersistence<T, string>({
+  constructor(private readonly database: BrowserWASQLiteDatabase) {
+    this.persistence = createBrowserWASQLitePersistence<PersistedRow, string>({
       database: this.database,
     })
+  }
+
+  public createPersistence<T extends object>() {
+    // Browser OPFS persistence is intended to be shared per database. Expose
+    // typed collection views over that one shared runtime instance.
+    return this.persistence as unknown as PersistedCollectionPersistence<T, string>
   }
 }
 
