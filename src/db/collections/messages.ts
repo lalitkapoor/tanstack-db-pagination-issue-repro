@@ -98,6 +98,17 @@ export class MessagesStore {
     const queryOpts = queryCollectionOptions({
       id: "messages",
       queryKey: (opts: LoadSubsetOptions) => {
+        const comparisons = extractSimpleComparisons(opts.where)
+        const threadId = comparisons.find((c) => c.field.join(".") === "threadId")
+          ?.value as string | undefined
+
+        if (!threadId) {
+          // query-db-collection calls queryKey({}) during sync setup to establish a
+          // base write/cache context key. This keeps that internal path safe without
+          // treating unscoped message loads as valid fetches.
+          return ["db", "messages"] as const
+        }
+
         const query = this.getQueryShape(opts)
         return [
           "db",
@@ -136,13 +147,12 @@ export class MessagesStore {
     )
   }
 
-  public async init() {
+  public init() {
     if (this.collectionInstance) {
       return this.collectionInstance
     }
 
     this.collectionInstance = this.createCollection()
-    await this.collectionInstance.stateWhenReady()
     return this.collectionInstance
   }
 

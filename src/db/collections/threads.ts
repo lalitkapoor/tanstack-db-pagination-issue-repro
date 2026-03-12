@@ -139,13 +139,12 @@ export class ThreadsStore {
     )
   }
 
-  public async init() {
+  public init() {
     if (this.collectionInstance) {
       return this.collectionInstance
     }
 
     this.collectionInstance = this.createCollection()
-    await this.collectionInstance.stateWhenReady()
     return this.collectionInstance
   }
 
