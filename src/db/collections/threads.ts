@@ -116,13 +116,16 @@ export class ThreadsStore {
       queryClient: this.queryClient,
       getKey: (thread) => thread.id,
       onInsert: async ({ transaction }) => {
+        const persistedThreads: Thread[] = []
+
         for (const mutation of transaction.mutations) {
-          await persist("/api/threads", "POST", mutation.modified)
+          const persistedThread = await persist<Thread>("/api/threads", "POST", mutation.modified)
+          persistedThreads.push(persistedThread)
         }
 
         this.collection.utils.writeBatch(() => {
-          for (const mutation of transaction.mutations) {
-            this.collection.utils.writeInsert(mutation.modified)
+          for (const persistedThread of persistedThreads) {
+            this.collection.utils.writeInsert(persistedThread)
           }
         })
 

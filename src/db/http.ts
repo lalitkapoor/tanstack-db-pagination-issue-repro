@@ -1,19 +1,19 @@
-export async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`Fetch ${url} failed: ${res.status}`)
+export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    const method = init?.method ?? "GET"
+    throw new Error(`[fetchJson] ${method} ${url} failed: ${response.status}`)
   }
-  return res.json()
+
+  return response.json() as Promise<T>
 }
 
-export async function persist(url: string, method: string, body?: unknown) {
-  const res = await fetch(url, {
+export async function persist<T>(url: string, method: string, body?: unknown): Promise<T> {
+  const init: RequestInit = {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
-  })
-
-  if (!res.ok) {
-    throw new Error(`[persist] ${method} ${url} failed: ${res.status}`)
   }
+
+  return fetchJson<T>(url, init)
 }

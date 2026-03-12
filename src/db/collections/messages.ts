@@ -127,17 +127,20 @@ export class MessagesStore {
       queryClient: this.queryClient,
       getKey: (message) => message.id,
       onInsert: async ({ transaction }) => {
+        const persistedMessages: Message[] = [];
+
         for (const mutation of transaction.mutations) {
-          await persist(
+          const persistedMessage = await persist<Message>(
             `/api/threads/${mutation.modified.threadId}/messages`,
             "POST",
             mutation.modified,
           );
+          persistedMessages.push(persistedMessage);
         }
 
         this.collection.utils.writeBatch(() => {
-          for (const mutation of transaction.mutations) {
-            this.collection.utils.writeInsert(mutation.modified);
+          for (const persistedMessage of persistedMessages) {
+            this.collection.utils.writeInsert(persistedMessage);
           }
         });
 

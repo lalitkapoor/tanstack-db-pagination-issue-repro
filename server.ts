@@ -96,12 +96,13 @@ const server = Bun.serve({
         return new Response("Thread not found", { status: 404, headers: corsHeaders })
       }
 
+      const createdAt = Date.now()
       const message: Message = {
         id: body.id || crypto.randomUUID(),
         threadId,
         role: body.role,
         content: body.content,
-        createdAt: body.createdAt ?? Date.now(),
+        createdAt,
       }
 
       database.insertMessage(message)
@@ -129,11 +130,12 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/threads" && req.method === "POST") {
       const body = (await req.json()) as Thread
+      const now = Date.now()
       const thread: Thread = {
         id: body.id || crypto.randomUUID(),
         title: body.title,
-        createdAt: body.createdAt ?? Date.now(),
-        updatedAt: body.updatedAt ?? body.createdAt ?? Date.now(),
+        createdAt: now,
+        updatedAt: now,
       }
 
       database.insertThread(thread)
