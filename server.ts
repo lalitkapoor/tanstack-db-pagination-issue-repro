@@ -28,12 +28,15 @@ function getThreadMessagesPath(pathname: string) {
 }
 
 function scheduleAssistantReply(userMessage: Message) {
+  const replyCreatedAt = Math.max(Date.now(), userMessage.createdAt + 1)
   const reply: Message = {
     id: crypto.randomUUID(),
     threadId: userMessage.threadId,
     role: "assistant",
     content: `I am a fake reply to: ${userMessage.content}`,
-    createdAt: Date.now(),
+    // Keep fake replies in conversational order even when both writes happen
+    // within the same millisecond and would otherwise tie on createdAt.
+    createdAt: replyCreatedAt,
   }
 
   database.insertMessage(reply)
