@@ -174,6 +174,43 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
     ORDER BY created_at DESC, id DESC
     LIMIT ?2
   `)
+  const listMessagesAnchoredStatement = db.query<MessageRow, [string, number, number]>(`
+    SELECT id, thread_id, role, content, created_at
+    FROM messages
+    WHERE thread_id = ?1 AND created_at <= ?3
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?2
+  `)
+  const listMessagesAnchoredBeforeStatement = db.query<MessageRow, [string, number, number, number]>(`
+    SELECT id, thread_id, role, content, created_at
+    FROM messages
+    WHERE thread_id = ?1
+      AND created_at <= ?3
+      AND created_at < ?4
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?2
+  `)
+  const listMessagesAnchoredCursorStatement = db.query<
+    MessageRow,
+    [string, number, number, number, string]
+  >(`
+    SELECT id, thread_id, role, content, created_at
+    FROM messages
+    WHERE thread_id = ?1
+      AND created_at <= ?3
+      AND (
+        created_at < ?4
+        OR (created_at = ?4 AND id < ?5)
+      )
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?2
+  `)
+  const listMessagesAfterStatement = db.query<MessageRow, [string, number]>(`
+    SELECT id, thread_id, role, content, created_at
+    FROM messages
+    WHERE thread_id = ?1 AND created_at > ?2
+    ORDER BY created_at ASC, id ASC
+  `)
   const insertMessageStatement = db.query<never, [string, string, string, string, number]>(`
     INSERT INTO messages (id, thread_id, role, content, created_at)
     VALUES (?1, ?2, ?3, ?4, ?5)
@@ -260,20 +297,46 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
       return row ? toThread(row) : null
     },
 
-    listMessages(threadId: string, limit: number, before?: number | MessageCursor) {
+    listMessages(
+      threadId: string,
+      limit: number,
+      before?: number | MessageCursor,
+      maxCreatedAt?: number,
+    ) {
       const rows =
-        before == null
-          ? listMessagesLatestStatement.all(threadId, limit)
-          : typeof before === "number"
-            ? listMessagesStatement.all(threadId, limit, before)
-            : listMessagesCursorStatement.all(
-                threadId,
-                limit,
-                before.createdAt,
-                before.id,
-              )
+        maxCreatedAt == null
+          ? before == null
+            ? listMessagesLatestStatement.all(threadId, limit)
+            : typeof before === "number"
+              ? listMessagesStatement.all(threadId, limit, before)
+              : listMessagesCursorStatement.all(
+                  threadId,
+                  limit,
+                  before.createdAt,
+                  before.id,
+                )
+          : before == null
+            ? listMessagesAnchoredStatement.all(threadId, limit, maxCreatedAt)
+            : typeof before === "number"
+              ? listMessagesAnchoredBeforeStatement.all(
+                  threadId,
+                  limit,
+                  maxCreatedAt,
+                  before,
+                )
+              : listMessagesAnchoredCursorStatement.all(
+                  threadId,
+                  limit,
+                  maxCreatedAt,
+                  before.createdAt,
+                  before.id,
+                )
 
       return rows.map(toMessage)
+    },
+
+    listMessagesAfter(threadId: string, afterCreatedAt: number) {
+      return listMessagesAfterStatement.all(threadId, afterCreatedAt).map(toMessage)
     },
 
     insertThread(input: Thread) {

@@ -72,7 +72,24 @@ const server = Bun.serve({
       const limit = Number(url.searchParams.get("limit") || "50")
       const beforeCreatedAt = url.searchParams.get("beforeCreatedAt")
       const beforeId = url.searchParams.get("beforeId")
+      const maxCreatedAt = url.searchParams.get("maxCreatedAt")
+      const afterCreatedAt = url.searchParams.get("afterCreatedAt")
       const before = url.searchParams.get("before")
+
+      if (afterCreatedAt) {
+        const result = database.listMessagesAfter(threadId, Number(afterCreatedAt))
+        const first = result[0]
+        const last = result[result.length - 1]
+
+        console.log(
+          `[server] GET /api/threads/${threadId}/messages afterCreatedAt=${afterCreatedAt} -> ${result.length} msgs` +
+            (first
+              ? ` [${first.id} (t=${first.createdAt}) -> ${last.id} (t=${last.createdAt})]`
+              : ""),
+        )
+
+        return Response.json(result, { headers: corsHeaders })
+      }
 
       const cursor =
         beforeCreatedAt && beforeId
@@ -88,12 +105,13 @@ const server = Bun.serve({
         threadId,
         limit,
         cursor,
+        maxCreatedAt ? Number(maxCreatedAt) : undefined,
       )
       const first = result[0]
       const last = result[result.length - 1]
 
       console.log(
-        `[server] GET /api/threads/${threadId}/messages limit=${limit} beforeCreatedAt=${beforeCreatedAt ?? before ?? "none"} beforeId=${beforeId ?? "none"} -> ${result.length} msgs` +
+        `[server] GET /api/threads/${threadId}/messages limit=${limit} maxCreatedAt=${maxCreatedAt ?? "none"} beforeCreatedAt=${beforeCreatedAt ?? before ?? "none"} beforeId=${beforeId ?? "none"} -> ${result.length} msgs` +
           (first
             ? ` [${first.id} (t=${first.createdAt}) -> ${last.id} (t=${last.createdAt})]`
             : ""),

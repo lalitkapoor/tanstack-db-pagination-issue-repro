@@ -20,13 +20,20 @@ type Message = {
   createdAt: number
 }
 
-type MessageQueryShape = {
-  kind: "thread"
-  threadId: string
-  beforeCreatedAt?: number
-  beforeId?: string
-  limit: number
-}
+type MessageQueryShape =
+  | {
+      kind: "history"
+      threadId: string
+      maxCreatedAt?: number
+      beforeCreatedAt?: number
+      beforeId?: string
+      limit: number
+    }
+  | {
+      kind: "live"
+      threadId: string
+      afterCreatedAt: number
+    }
 
 export class MessagesStore {
   private collectionInstance: ReturnType<
@@ -88,7 +95,22 @@ export class MessagesStore {
       throw new Error("Message queries must include threadId")
     }
 
+    const afterCreatedAt = comparisons.find(
+      (c) => c.field.join(".") === "createdAt" && c.operator === "gt",
+    )?.value as number | undefined
+
+    if (afterCreatedAt != null) {
+      return {
+        kind: "live",
+        threadId,
+        afterCreatedAt,
+      }
+    }
+
     const limit = opts.limit ?? 50
+    const maxCreatedAt = comparisons.find(
+      (c) => c.field.join(".") === "createdAt" && c.operator === "lte",
+    )?.value as number | undefined
 
     let beforeCreatedAt: number | undefined
     let beforeId: string | undefined
@@ -112,8 +134,9 @@ export class MessagesStore {
     }
 
     return {
-      kind: "thread",
+      kind: "history",
       threadId,
+      maxCreatedAt,
       beforeCreatedAt,
       beforeId,
       limit,
@@ -133,11 +156,22 @@ export class MessagesStore {
     }
 
     const query = this.getQueryShape(opts)
+    if (query.kind === "live") {
+      return [
+        "db",
+        "messages",
+        "live",
+        query.threadId,
+        query.afterCreatedAt,
+      ] as const
+    }
+
     return [
       "db",
       "messages",
-      "thread",
+      "history",
       query.threadId,
+      query.maxCreatedAt ?? "unbounded",
       query.beforeCreatedAt ?? "latest",
       query.beforeId ?? "latest",
       query.limit,
@@ -148,9 +182,21 @@ export class MessagesStore {
     this.internalFetchCount++
     const query = this.getQueryShape(opts)
 
+    if (query.kind === "live") {
+      const params = new URLSearchParams({
+        afterCreatedAt: String(query.afterCreatedAt),
+      })
+
+      return fetchJson<Message[]>(`/api/threads/${query.threadId}/messages?${params}`)
+    }
+
     const params = new URLSearchParams({
       limit: String(query.limit),
     })
+
+    if (query.maxCreatedAt != null) {
+      params.set("maxCreatedAt", String(query.maxCreatedAt))
+    }
 
     if (query.beforeCreatedAt != null) {
       params.set("beforeCreatedAt", String(query.beforeCreatedAt))
