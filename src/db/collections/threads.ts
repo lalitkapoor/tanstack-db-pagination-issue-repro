@@ -19,17 +19,10 @@ type Thread = {
   updatedAt: number
 }
 
-type ThreadQueryShape =
-  | {
-      kind: "by-id"
-      threadId: string
-    }
-  | {
-      kind: "list"
-      beforeUpdatedAt?: number
-      beforeId?: string
-      limit: number
-    }
+type ListThreadsResponse = {
+  data: Thread[]
+  nextCursor?: string | null
+}
 
 export class ThreadsStore {
   private collectionInstance: ReturnType<ThreadsStore["createCollection"]> | null =
@@ -39,6 +32,48 @@ export class ThreadsStore {
     private readonly queryClient: QueryClient,
     private readonly databaseContext: DatabaseContext,
   ) {}
+
+  private getApiToken() {
+    const token = globalThis.localStorage?.getItem("API_TOKEN")
+    if (!token) {
+      throw new Error("Missing localStorage.API_TOKEN for Applecart thread fetches")
+    }
+
+    return token
+  }
+
+  public async listThreadsPage(limit: number, cursor?: string | null) {
+    const params = new URLSearchParams({
+      limit: String(limit),
+    })
+
+    if (cursor) {
+      params.set("cursor", cursor)
+    }
+
+    const response = await fetchJson<ListThreadsResponse>(
+      `/api/applecart/threads?${params}`,
+      {
+        headers: {
+          Authorization: `Bearer ${this.getApiToken()}`,
+        },
+      },
+    )
+
+    this.collection.utils.writeUpsert(response.data)
+
+    return {
+      threads: response.data,
+      nextCursor: response.nextCursor ?? null,
+    }
+  }
+
+  private encodeApplecartCursor(timestamp: number, id: string) {
+    return btoa(JSON.stringify({ version: 1, timestamp, id }))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "")
+  }
 
   private extractCursorBoundary(
     expr: LoadSubsetOptions["where"] | undefined,
@@ -81,19 +116,8 @@ export class ThreadsStore {
     return boundary
   }
 
-  private getQueryShape(opts: LoadSubsetOptions): ThreadQueryShape {
-    const comparisons = extractSimpleComparisons(opts.where)
-    const threadId = comparisons.find((c) => c.field.join(".") === "id")?.value
-
-    if (threadId) {
-      return {
-        kind: "by-id",
-        threadId,
-      }
-    }
-
+  private getQueryShape(opts: LoadSubsetOptions) {
     const limit = opts.limit ?? 50
-
     let beforeUpdatedAt: number | undefined
     let beforeId: string | undefined
     const cursor = (
@@ -107,6 +131,7 @@ export class ThreadsStore {
       beforeUpdatedAt = boundary.updatedAt
       beforeId = boundary.id
     } else {
+      const comparisons = extractSimpleComparisons(opts.where)
       beforeUpdatedAt = comparisons.find(
         (c) => c.field.join(".") === "updatedAt" && c.operator === "lt",
       )?.value as number | undefined
@@ -116,59 +141,40 @@ export class ThreadsStore {
     }
 
     return {
-      kind: "list",
+      limit,
       beforeUpdatedAt,
       beforeId,
-      limit,
     }
+  }
+
+  private getQueryKey(opts: LoadSubsetOptions) {
+    const query = this.getQueryShape(opts)
+
+    return [
+      "db",
+      "threads",
+      "list",
+      query.beforeUpdatedAt ?? "latest",
+      query.beforeId ?? "latest",
+      query.limit,
+    ] as const
   }
 
   private async fetchThreads(opts: LoadSubsetOptions = {}) {
     const query = this.getQueryShape(opts)
+    const cursor =
+      query.beforeUpdatedAt != null && query.beforeId != null
+        ? this.encodeApplecartCursor(query.beforeUpdatedAt, query.beforeId)
+        : undefined
 
-    if (query.kind === "by-id") {
-      const res = await fetch(`/api/threads/${query.threadId}`)
-      if (res.status === 404) {
-        return [] as Thread[]
-      }
-      if (!res.ok) {
-        throw new Error(`Fetch /api/threads/${query.threadId} failed: ${res.status}`)
-      }
-      return [(await res.json()) as Thread]
-    }
-
-    const params = new URLSearchParams({
-      limit: String(query.limit),
-    })
-
-    if (query.beforeUpdatedAt != null) {
-      params.set("beforeUpdatedAt", String(query.beforeUpdatedAt))
-    }
-
-    if (query.beforeId != null) {
-      params.set("beforeId", query.beforeId)
-    }
-
-    return fetchJson<Thread[]>(`/api/threads?${params}`)
+    const page = await this.listThreadsPage(query.limit, cursor)
+    return page.threads
   }
 
   private createCollection() {
     const queryOpts = queryCollectionOptions({
       id: "threads",
-      queryKey: (opts: LoadSubsetOptions) => {
-        const query = this.getQueryShape(opts)
-        if (query.kind === "by-id") {
-          return ["db", "threads", "by-id", query.threadId] as const
-        }
-        return [
-          "db",
-          "threads",
-          "list",
-          query.beforeUpdatedAt ?? "latest",
-          query.beforeId ?? "latest",
-          query.limit,
-        ] as const
-      },
+      queryKey: (opts: LoadSubsetOptions) => this.getQueryKey(opts),
       syncMode: "on-demand" as const,
       queryFn: (ctx) => this.fetchThreads(ctx.meta?.loadSubsetOptions ?? {}),
       queryClient: this.queryClient,

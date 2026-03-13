@@ -82,7 +82,7 @@ export function App() {
         .from({ thread: threads })
         .orderBy(({ thread }) => thread.updatedAt, "desc")
         .orderBy(({ thread }) => thread.id, "desc"),
-    { pageSize: 8 },
+    { pageSize: 2 },
     [],
   )
 
@@ -136,7 +136,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (rawThreads.length === 0 || selectedThreadId) {
+    if (rawThreads.length === 0 || selectedThread) {
       return
     }
 
@@ -144,7 +144,7 @@ export function App() {
     if (nextThreadId) {
       selectThread(nextThreadId)
     }
-  }, [rawThreads, selectedThreadId, selectThread])
+  }, [rawThreads, selectedThread, selectThread])
 
   const sortedMessages = useMemo(
     () => [...rawHistoricalMessages].reverse().concat(liveTailMessages),
@@ -271,7 +271,7 @@ export function App() {
                 <CardTitle>Thread Controls</CardTitle>
                 <CardDescription>
                   Real DB-backed actions for thread creation and direct id
-                  lookup.
+                  selection.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
@@ -304,7 +304,7 @@ export function App() {
                       Load by id
                     </div>
                     <div className="text-[0.7rem] text-muted-foreground">
-                      Exercises `/api/threads/:id`
+                      Select a thread that is already loaded locally
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -342,7 +342,8 @@ export function App() {
                   <Badge variant="secondary">{rawThreads.length} loaded</Badge>
                 </CardAction>
                 <CardDescription>
-                  Paginated from `/api/threads` and ordered by `updatedAt`.
+                  Loaded from Applecart `listThreads` and ordered by
+                  `updatedAt`.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex min-h-0 flex-1 flex-col gap-2">
@@ -378,21 +379,19 @@ export function App() {
                     )
                   })}
                 </div>
-                {hasMoreThreads && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => fetchMoreThreads?.()}
-                    disabled={isFetchingMoreThreads}
-                  >
-                    {isFetchingMoreThreads ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <ArrowDown />
-                    )}
-                    Load older threads
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => fetchMoreThreads?.()}
+                  disabled={!hasMoreThreads || isFetchingMoreThreads}
+                >
+                  {isFetchingMoreThreads ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <ArrowDown />
+                  )}
+                  {hasMoreThreads ? "Load older threads" : "No older threads"}
+                </Button>
               </CardContent>
             </Card>
           </div>
@@ -405,7 +404,7 @@ export function App() {
                     <CardTitle>
                       {selectedThread?.title ?? "Unknown thread"}
                     </CardTitle>
-                    <Badge variant="outline">detail query</Badge>
+                    <Badge variant="outline">local detail</Badge>
                   </div>
                   <CardDescription>
                     {selectedThread

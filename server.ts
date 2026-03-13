@@ -27,6 +27,64 @@ function getThreadMessagesPath(pathname: string) {
   }
 }
 
+function parseBearerToken(req: Request) {
+  const authorization = req.headers.get("authorization")
+  if (!authorization) {
+    return null
+  }
+
+  const match = authorization.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() || null
+}
+
+async function proxyApplecartListThreads(req: Request) {
+  const bearerToken = parseBearerToken(req)
+  if (!bearerToken) {
+    return Response.json({ error: "Missing Authorization header" }, { status: 401, headers: corsHeaders })
+  }
+
+  const url = new URL(req.url)
+  const limit = Number(url.searchParams.get("limit") || "25")
+  const cursor = url.searchParams.get("cursor")
+
+  const upstream = await fetch("http://localhost:3000/api/v3/applecart", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      type: "listThreads",
+      request: {
+        scope: "my_threads",
+        limit,
+        includeCustomAgentChats: true,
+        ...(cursor ? { cursor } : {}),
+      },
+    }),
+  })
+
+  const responseBody = await upstream.text()
+  if (!upstream.ok) {
+    return new Response(responseBody, {
+      status: upstream.status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+      },
+    })
+  }
+
+  return new Response(responseBody, {
+    status: upstream.status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+    },
+  })
+}
+
 function scheduleAssistantReply(userMessage: Message) {
   const replyCreatedAt = Math.max(Date.now(), userMessage.createdAt + 1)
   const reply: Message = {
@@ -169,6 +227,10 @@ const server = Bun.serve({
       )
 
       return Response.json(result, { headers: corsHeaders })
+    }
+
+    if (url.pathname === "/api/applecart/threads" && req.method === "GET") {
+      return proxyApplecartListThreads(req)
     }
 
     if (url.pathname === "/api/threads" && req.method === "POST") {
