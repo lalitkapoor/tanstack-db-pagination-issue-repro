@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { eq, useLiveInfiniteQuery, useLiveQuery } from "@tanstack/react-db"
+import { eq, useLiveInfiniteQuery } from "@tanstack/react-db"
 import {
   ArrowDown,
   ArrowUp,
@@ -67,13 +67,11 @@ export function App() {
     [],
   )
 
-  const { data: selectedThread } = useLiveQuery(
-    (q) =>
-      q
-        .from({ thread: threads })
-        .where(({ thread }) => eq(thread.id, selectedThreadId))
-        .findOne(),
-    [selectedThreadId],
+  const selectedThread = useMemo(
+    () =>
+      rawThreads.find((thread) => thread.id === selectedThreadId) ??
+      threads.get(selectedThreadId),
+    [rawThreads, selectedThreadId, threads],
   )
 
   const {
