@@ -83,9 +83,7 @@ export class ThreadsStore {
 
   private getQueryShape(opts: LoadSubsetOptions): ThreadQueryShape {
     const comparisons = extractSimpleComparisons(opts.where)
-    const threadId = comparisons.find((c) => c.field.join(".") === "id")?.value as
-      | string
-      | undefined
+    const threadId = comparisons.find((c) => c.field.join(".") === "id")?.value
 
     if (threadId) {
       return {
