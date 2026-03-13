@@ -399,7 +399,7 @@ export function App() {
 
           <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)_auto]">
             <Card className="border border-border/60 shadow-none" size="sm">
-              <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+              <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <CardTitle>
@@ -409,33 +409,21 @@ export function App() {
                   </div>
                   <CardDescription>
                     {selectedThread
-                      ? `Thread ${selectedThread.id} was last updated ${formatTimestamp(selectedThread.updatedAt)}.`
+                      ? `Last updated ${formatTimestamp(selectedThread.updatedAt)}.`
                       : `No thread was found for ${selectedThreadId}.`}
                   </CardDescription>
                 </div>
-                <CardAction className="grid gap-2 sm:grid-cols-2">
-                  <Card
-                    size="sm"
-                    className="min-w-44 border border-border/60 bg-muted/20 shadow-none"
-                  >
-                    <CardHeader>
-                      <CardTitle>Current route</CardTitle>
-                    </CardHeader>
-                    <CardContent className="font-mono text-[0.7rem] text-muted-foreground">
-                      /api/threads/{selectedThreadId}/messages
-                    </CardContent>
-                  </Card>
-                  <Card
-                    size="sm"
-                    className="min-w-32 border border-border/60 bg-muted/20 shadow-none"
-                  >
-                    <CardHeader>
-                      <CardTitle>Loaded messages</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm font-medium">
-                      {sortedMessages.length}
-                    </CardContent>
-                  </Card>
+                <CardAction className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-0 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                    <div className="text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
+                      Current route
+                    </div>
+                    <div className="font-mono text-[0.7rem] text-muted-foreground">
+                      <span className="truncate">/api/threads/</span>
+                      <span className="truncate">{selectedThreadId}</span>
+                      <span className="truncate">/messages</span>
+                    </div>
+                  </div>
                 </CardAction>
               </CardHeader>
             </Card>
