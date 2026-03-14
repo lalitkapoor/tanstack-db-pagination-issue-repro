@@ -9,19 +9,15 @@ import {
 import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import { queryCollectionOptions } from "@tanstack/query-db-collection"
 import type { QueryClient } from "@tanstack/react-query"
-import { fetchJson, persist } from "../http"
+import type { Api } from "../../api"
+import type { Thread } from "../../api/threads"
 import type { DatabaseContext } from "../persistence"
 
-type Thread = {
-  id: string
-  title: string
-  createdAt: number
-  updatedAt: number
-}
-
-type ListThreadsResponse = {
-  data: Thread[]
-  nextCursor?: string | null
+type ThreadQueryShape = {
+  kind: "list"
+  limit: number
+  beforeUpdatedAt?: number
+  beforeId?: string
 }
 
 export class ThreadsStore {
@@ -31,49 +27,8 @@ export class ThreadsStore {
   constructor(
     private readonly queryClient: QueryClient,
     private readonly databaseContext: DatabaseContext,
+    private readonly api: Api,
   ) {}
-
-  private getApiToken() {
-    const token = globalThis.localStorage?.getItem("API_TOKEN")
-    if (!token) {
-      throw new Error("Missing localStorage.API_TOKEN for Applecart thread fetches")
-    }
-
-    return token
-  }
-
-  public async listThreadsPage(limit: number, cursor?: string | null) {
-    const params = new URLSearchParams({
-      limit: String(limit),
-    })
-
-    if (cursor) {
-      params.set("cursor", cursor)
-    }
-
-    const response = await fetchJson<ListThreadsResponse>(
-      `/api/applecart/threads?${params}`,
-      {
-        headers: {
-          Authorization: `Bearer ${this.getApiToken()}`,
-        },
-      },
-    )
-
-    this.collection.utils.writeUpsert(response.data)
-
-    return {
-      threads: response.data,
-      nextCursor: response.nextCursor ?? null,
-    }
-  }
-
-  private encodeApplecartCursor(timestamp: number, id: string) {
-    return btoa(JSON.stringify({ version: 1, timestamp, id }))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/g, "")
-  }
 
   private extractCursorBoundary(
     expr: LoadSubsetOptions["where"] | undefined,
@@ -116,7 +71,7 @@ export class ThreadsStore {
     return boundary
   }
 
-  private getQueryShape(opts: LoadSubsetOptions) {
+  private getQueryShape(opts: LoadSubsetOptions): ThreadQueryShape {
     const limit = opts.limit ?? 50
     let beforeUpdatedAt: number | undefined
     let beforeId: string | undefined
@@ -141,6 +96,7 @@ export class ThreadsStore {
     }
 
     return {
+      kind: "list",
       limit,
       beforeUpdatedAt,
       beforeId,
@@ -162,12 +118,12 @@ export class ThreadsStore {
 
   private async fetchThreads(opts: LoadSubsetOptions = {}) {
     const query = this.getQueryShape(opts)
-    const cursor =
-      query.beforeUpdatedAt != null && query.beforeId != null
-        ? this.encodeApplecartCursor(query.beforeUpdatedAt, query.beforeId)
-        : undefined
-
-    const page = await this.listThreadsPage(query.limit, cursor)
+    const page = await this.api.threads.list({
+      limit: query.limit,
+      beforeUpdatedAt: query.beforeUpdatedAt,
+      beforeId: query.beforeId,
+    })
+    this.collection.utils.writeUpsert(page.threads)
     return page.threads
   }
 
@@ -183,7 +139,9 @@ export class ThreadsStore {
         const persistedThreads: Thread[] = []
 
         for (const mutation of transaction.mutations) {
-          const persistedThread = await persist<Thread>("/api/threads", "POST", mutation.modified)
+          const persistedThread = await this.api.threads.create(
+            mutation.modified,
+          )
           persistedThreads.push(persistedThread)
         }
 

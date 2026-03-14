@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query"
+import { Api } from "../api"
 import {
   initPersistence,
   resetPersistenceStorage,
@@ -12,13 +13,15 @@ type CleanupTarget = {
 }
 
 class AppDB {
+  public readonly api: Api
   public readonly messages: MessagesStore
   public readonly threads: ThreadsStore
   private cleanupTargets: CleanupTarget[] = []
 
   constructor(queryClient: QueryClient, databaseContext: DatabaseContext) {
-    this.messages = new MessagesStore(queryClient, databaseContext)
-    this.threads = new ThreadsStore(queryClient, databaseContext)
+    this.api = new Api()
+    this.messages = new MessagesStore(queryClient, databaseContext, this.api)
+    this.threads = new ThreadsStore(queryClient, databaseContext, this.api)
   }
 
   public async init() {

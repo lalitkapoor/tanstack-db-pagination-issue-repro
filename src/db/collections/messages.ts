@@ -9,15 +9,26 @@ import {
 import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import { queryCollectionOptions } from "@tanstack/query-db-collection"
 import type { QueryClient } from "@tanstack/react-query"
-import { fetchJson, persist } from "../http"
+import type { Api } from "../../api"
+import type {
+  ChatResponseStreamEvent,
+  MessageRole,
+  MessageStatus,
+  ThreadMessage,
+} from "../../api/messages"
 import type { DatabaseContext } from "../persistence"
 
 type Message = {
   id: string
   threadId: string
-  role: "user" | "assistant"
+  role: MessageRole
   content: string
   createdAt: number
+  status?: MessageStatus
+  queued?: boolean
+  traceId?: string
+  inferenceId?: string
+  errorMessage?: string
 }
 
 type MessageQueryShape =
@@ -40,15 +51,56 @@ export class MessagesStore {
     MessagesStore["createCollection"]
   > | null = null
   private internalFetchCount = 0
+  private readonly historyCursorByBoundary = new Map<string, string | null>()
 
   constructor(
     private readonly queryClient: QueryClient,
     private readonly databaseContext: DatabaseContext,
+    private readonly api: Api,
   ) {}
 
-  private extractCursorBoundary(
-    expr: LoadSubsetOptions["where"] | undefined,
-  ): {
+  private getHistoryBoundaryKey(createdAt: number, id: string) {
+    return `${createdAt}:${id}`
+  }
+
+  private assertNeverMessageRole(message: never): never {
+    throw new Error(`Unhandled message role: ${JSON.stringify(message)}`)
+  }
+
+  private toMessageRow(message: ThreadMessage): Message {
+    const baseRow = {
+      id: message.id,
+      threadId: message.threadId,
+      createdAt: message.createdAt,
+      status: message.status,
+      traceId: message.traceId,
+      inferenceId: message.inferenceId,
+    }
+
+    switch (message.role) {
+      case "user":
+      case "assistant":
+      case "system":
+      case "tool":
+        return {
+          ...baseRow,
+          role: message.role,
+          content: message.text,
+          queued: message.queued,
+        }
+      case "error":
+        return {
+          ...baseRow,
+          role: message.role,
+          content: message.text,
+          errorMessage: message.error.message,
+        }
+      default:
+        return this.assertNeverMessageRole(message)
+    }
+  }
+
+  private extractCursorBoundary(expr: LoadSubsetOptions["where"] | undefined): {
     createdAt?: number
     id?: string
   } {
@@ -83,6 +135,7 @@ export class MessagesStore {
         }
       }
     })
+
     return boundary
   }
 
@@ -178,35 +231,159 @@ export class MessagesStore {
     ] as const
   }
 
+  private async fetchHistoryPage(args: {
+    threadId: string
+    limit: number
+    cursor?: string
+  }) {
+    const response = await this.api.messages.list(args)
+
+    const rows = response.data
+      .map((message) => this.toMessageRow(message))
+      .reverse()
+    for (const row of rows) {
+      this.historyCursorByBoundary.set(
+        this.getHistoryBoundaryKey(row.createdAt, row.id),
+        response.nextCursor ?? null,
+      )
+    }
+
+    return rows
+  }
+
+  private replaceOptimisticMessage(args: {
+    optimisticMessageId: string
+    serverMessage: Message
+  }) {
+    const optimisticMessage = this.collection.get(args.optimisticMessageId)
+    if (!optimisticMessage) {
+      this.collection.utils.writeUpsert(args.serverMessage)
+      return
+    }
+
+    this.collection.utils.writeBatch(() => {
+      if (args.optimisticMessageId !== args.serverMessage.id) {
+        this.collection.utils.writeDelete(args.optimisticMessageId)
+      }
+      this.collection.utils.writeUpsert(args.serverMessage)
+    })
+  }
+
+  private async streamMessageResponse(args: {
+    content: string
+    optimisticMessageId: string
+    threadId: string
+  }) {
+    let replacedOptimisticUserMessage = false
+    const pendingTextByMessageId = new Map<string, string>()
+    const pendingStatusByMessageId = new Map<string, MessageStatus>()
+
+    for await (const event of this.api.messages.send({
+      content: args.content,
+      idempotencyKey: args.optimisticMessageId,
+      threadId: args.threadId,
+    })) {
+      switch (event.type) {
+        case "message": {
+          const pendingText = pendingTextByMessageId.get(event.message.id) ?? ""
+          const pendingStatus = pendingStatusByMessageId.get(event.message.id)
+          const row = {
+            ...this.toMessageRow(event.message),
+            content: `${event.message.text}${pendingText}`,
+            status: pendingStatus ?? event.message.status,
+          }
+
+          pendingTextByMessageId.delete(event.message.id)
+          pendingStatusByMessageId.delete(event.message.id)
+
+          if (event.message.role === "user" && !replacedOptimisticUserMessage) {
+            replacedOptimisticUserMessage = true
+            this.replaceOptimisticMessage({
+              optimisticMessageId: args.optimisticMessageId,
+              serverMessage: row,
+            })
+            break
+          }
+
+          this.collection.utils.writeUpsert(row)
+          break
+        }
+        case "message_delta": {
+          const current = this.collection.get(event.messageId)
+          if (!current) {
+            pendingTextByMessageId.set(
+              event.messageId,
+              `${pendingTextByMessageId.get(event.messageId) ?? ""}${event.textDelta}`,
+            )
+            break
+          }
+
+          this.collection.utils.writeUpdate({
+            id: event.messageId,
+            content: `${current.content}${event.textDelta}`,
+          })
+          break
+        }
+        case "message_status":
+          if (!this.collection.get(event.messageId)) {
+            pendingStatusByMessageId.set(event.messageId, event.status)
+            break
+          }
+
+          this.collection.utils.writeUpdate({
+            id: event.messageId,
+            status: event.status,
+          })
+          break
+        case "error":
+          this.collection.utils.writeUpdate({
+            id: args.optimisticMessageId,
+            status: "failed",
+            errorMessage: event.error.message,
+          })
+          throw new Error(event.error.message)
+        case "done":
+          await this.collection.utils.refetch()
+          return
+      }
+    }
+  }
+
   private async fetchMessages(opts: LoadSubsetOptions = {}) {
-    this.internalFetchCount++
     const query = this.getQueryShape(opts)
 
     if (query.kind === "live") {
-      const params = new URLSearchParams({
-        afterCreatedAt: String(query.afterCreatedAt),
-      })
-
-      return fetchJson<Message[]>(`/api/threads/${query.threadId}/messages?${params}`)
+      return []
     }
 
-    const params = new URLSearchParams({
-      limit: String(query.limit),
+    this.internalFetchCount++
+
+    let cursor: string | undefined
+    if (query.beforeCreatedAt != null && query.beforeId != null) {
+      const boundaryKey = this.getHistoryBoundaryKey(
+        query.beforeCreatedAt,
+        query.beforeId,
+      )
+
+      if (!this.historyCursorByBoundary.has(boundaryKey)) {
+        throw new Error(
+          `Missing Applecart nextCursor for history boundary ${query.beforeCreatedAt}:${query.beforeId}`,
+        )
+      }
+
+      const nextCursor = this.historyCursorByBoundary.get(boundaryKey)
+      if (!nextCursor) {
+        return []
+      }
+
+      cursor = nextCursor
+    }
+
+    return this.fetchHistoryPage({
+      threadId: query.threadId,
+      limit: query.limit,
+      cursor,
     })
-
-    if (query.maxCreatedAt != null) {
-      params.set("maxCreatedAt", String(query.maxCreatedAt))
-    }
-
-    if (query.beforeCreatedAt != null) {
-      params.set("beforeCreatedAt", String(query.beforeCreatedAt))
-    }
-
-    if (query.beforeId != null) {
-      params.set("beforeId", query.beforeId)
-    }
-
-    return fetchJson<Message[]>(`/api/threads/${query.threadId}/messages?${params}`)
   }
 
   private createCollection() {
@@ -217,26 +394,6 @@ export class MessagesStore {
       queryFn: (ctx) => this.fetchMessages(ctx.meta?.loadSubsetOptions ?? {}),
       queryClient: this.queryClient,
       getKey: (message) => message.id,
-      onInsert: async ({ transaction }) => {
-        const persistedMessages: Message[] = []
-
-        for (const mutation of transaction.mutations) {
-          const persistedMessage = await persist<Message>(
-            `/api/threads/${mutation.modified.threadId}/messages`,
-            "POST",
-            mutation.modified,
-          )
-          persistedMessages.push(persistedMessage)
-        }
-
-        this.collection.utils.writeBatch(() => {
-          for (const persistedMessage of persistedMessages) {
-            this.collection.utils.writeInsert(persistedMessage)
-          }
-        })
-
-        return { refetch: false }
-      },
     })
 
     return createCollection(
@@ -248,7 +405,7 @@ export class MessagesStore {
       >({
         ...queryOpts,
         persistence: this.databaseContext.createPersistence<Message>(),
-        schemaVersion: 2,
+        schemaVersion: 3,
       }),
     )
   }
@@ -276,32 +433,30 @@ export class MessagesStore {
 
   public add(content: string, threadId: string) {
     const id = crypto.randomUUID()
-
-    this.collection.insert({
+    this.collection.utils.writeInsert({
       id,
       threadId,
       role: "user",
       content,
       createdAt: Date.now(),
+      status: "in_progress",
+    })
+
+    void this.streamMessageResponse({
+      content,
+      optimisticMessageId: id,
+      threadId,
+    }).catch((error) => {
+      const errorMessage =
+        error instanceof Error ? error.message : "Applecart send failed"
+
+      this.collection.utils.writeUpdate({
+        id,
+        status: "failed",
+        errorMessage,
+      })
     })
 
     return id
-  }
-
-  /** Insert a message from the server (SSE) into synced state without refetching. */
-  public addServer(msg: {
-    id: string
-    threadId: string
-    role: "user" | "assistant"
-    content: string
-    createdAt: number
-  }) {
-    this.collection.utils.writeInsert({
-      id: msg.id,
-      threadId: msg.threadId,
-      role: msg.role,
-      content: msg.content,
-      createdAt: msg.createdAt,
-    })
   }
 }

@@ -10,7 +10,7 @@ import type { Message, Thread } from "./server/types"
 const corsHeaders = {
   "Access-Control-Allow-Origin": "http://localhost:11000",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
 }
 
 const database = createServerDatabase()
@@ -25,6 +25,32 @@ function getThreadMessagesPath(pathname: string) {
   return {
     threadId: decodeURIComponent(match[1]),
   }
+}
+
+function getApplecartThreadMessagesPath(pathname: string) {
+  const match = pathname.match(/^\/api\/applecart\/threads\/([^/]+)\/messages$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    threadId: decodeURIComponent(match[1]),
+  }
+}
+
+function getApplecartThreadResponsesPath(pathname: string) {
+  const match = pathname.match(/^\/api\/applecart\/threads\/([^/]+)\/responses$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    threadId: decodeURIComponent(match[1]),
+  }
+}
+
+function getApplecartUrl() {
+  return "http://localhost:3000/api/v3/applecart"
 }
 
 function parseBearerToken(req: Request) {
@@ -47,7 +73,7 @@ async function proxyApplecartListThreads(req: Request) {
   const limit = Number(url.searchParams.get("limit") || "25")
   const cursor = url.searchParams.get("cursor")
 
-  const upstream = await fetch("http://localhost:3000/api/v3/applecart", {
+  const upstream = await fetch(getApplecartUrl(), {
     method: "POST",
     headers: {
       authorization: `Bearer ${bearerToken}`,
@@ -81,6 +107,115 @@ async function proxyApplecartListThreads(req: Request) {
     headers: {
       ...corsHeaders,
       "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+    },
+  })
+}
+
+async function proxyApplecartListThreadMessages(req: Request, threadId: string) {
+  const bearerToken = parseBearerToken(req)
+  if (!bearerToken) {
+    return Response.json(
+      { error: "Missing Authorization header" },
+      { status: 401, headers: corsHeaders },
+    )
+  }
+
+  const url = new URL(req.url)
+  const limit = Number(url.searchParams.get("limit") || "50")
+  const cursor = url.searchParams.get("cursor")
+
+  const upstream = await fetch(getApplecartUrl(), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      type: "listThreadMessages",
+      request: {
+        threadId,
+        direction: "before",
+        limit,
+        ...(cursor ? { cursor } : {}),
+      },
+    }),
+  })
+
+  const responseBody = await upstream.text()
+  return new Response(responseBody, {
+    status: upstream.status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+    },
+  })
+}
+
+async function proxyApplecartThreadResponse(req: Request, threadId: string) {
+  const bearerToken = parseBearerToken(req)
+  if (!bearerToken) {
+    return Response.json(
+      { error: "Missing Authorization header" },
+      { status: 401, headers: corsHeaders },
+    )
+  }
+
+  let requestBody: unknown
+  try {
+    requestBody = await req.json()
+  } catch {
+    return Response.json(
+      { error: "Request body must be valid JSON" },
+      { status: 400, headers: corsHeaders },
+    )
+  }
+
+  if (
+    requestBody == null ||
+    typeof requestBody !== "object" ||
+    typeof (requestBody as { content?: unknown }).content !== "string" ||
+    (requestBody as { content: string }).content.trim().length === 0
+  ) {
+    return Response.json(
+      { error: "Invalid chat response payload" },
+      { status: 400, headers: corsHeaders },
+    )
+  }
+
+  const body = requestBody as {
+    content: string
+    agentId?: string
+    includeToolSteps?: boolean
+    idempotencyKey?: string
+  }
+
+  const upstream = await fetch(getApplecartUrl(), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      "content-type": "application/json",
+      accept: req.headers.get("accept") ?? "application/x-ndjson",
+    },
+    body: JSON.stringify({
+      type: "sendMessage",
+      request: {
+        threadId,
+        message: {
+          text: body.content,
+        },
+        agentId: body.agentId,
+        includeToolSteps: body.includeToolSteps,
+        idempotencyKey: body.idempotencyKey,
+      },
+    }),
+  })
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": upstream.headers.get("content-type") ?? "application/x-ndjson",
     },
   })
 }
@@ -124,6 +259,16 @@ const server = Bun.serve({
     }
 
     const threadMessagesPath = getThreadMessagesPath(url.pathname)
+    const applecartThreadMessagesPath = getApplecartThreadMessagesPath(url.pathname)
+    const applecartThreadResponsesPath = getApplecartThreadResponsesPath(url.pathname)
+
+    if (applecartThreadMessagesPath && req.method === "GET") {
+      return proxyApplecartListThreadMessages(req, applecartThreadMessagesPath.threadId)
+    }
+
+    if (applecartThreadResponsesPath && req.method === "POST") {
+      return proxyApplecartThreadResponse(req, applecartThreadResponsesPath.threadId)
+    }
 
     if (threadMessagesPath && req.method === "GET") {
       const { threadId } = threadMessagesPath

@@ -9,10 +9,8 @@ import React, {
 import {
   and,
   eq,
-  gt,
   lte,
   useLiveInfiniteQuery,
-  useLiveQuery,
 } from "@tanstack/react-db"
 import {
   ArrowDown,
@@ -47,54 +45,22 @@ function formatTimestamp(value: number) {
   })
 }
 
-export function App() {
-  const db = getDB()
-  const threads = db.threads.collection
-  const messages = db.messages.collection
-  const [selectedThreadId, setSelectedThreadId] = useState(SEEDED_THREAD_ID)
-  const [threadLookupId, setThreadLookupId] = useState(SEEDED_THREAD_ID)
-  const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState(() =>
-    Date.now(),
-  )
-  const [newThreadTitle, setNewThreadTitle] = useState("")
-  const [messageInput, setMessageInput] = useState("")
-  const [displayFetchCount, setDisplayFetchCount] = useState(
-    db.messages.fetchCount,
-  )
+type MessagesCollection = ReturnType<typeof getDB>["messages"]["collection"]
+
+function ThreadMessagesPanel(props: {
+  messages: MessagesCollection
+  selectedThreadId: string
+  messageAnchorCreatedAt: number
+}) {
+  const {
+    messages,
+    selectedThreadId,
+    messageAnchorCreatedAt,
+  } = props
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevScrollHeightRef = useRef(0)
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDisplayFetchCount(db.messages.fetchCount)
-    }, 500)
-    return () => clearInterval(interval)
-  }, [db])
-
   const {
-    data: rawThreads = [],
-    hasNextPage: hasMoreThreads,
-    fetchNextPage: fetchMoreThreads,
-    isFetchingNextPage: isFetchingMoreThreads,
-  } = useLiveInfiniteQuery(
-    (q) =>
-      q
-        .from({ thread: threads })
-        .orderBy(({ thread }) => thread.updatedAt, "desc")
-        .orderBy(({ thread }) => thread.id, "desc"),
-    { pageSize: 2 },
-    [],
-  )
-
-  const selectedThread = useMemo(
-    () =>
-      rawThreads.find((thread) => thread.id === selectedThreadId) ??
-      threads.get(selectedThreadId),
-    [rawThreads, selectedThreadId, threads],
-  )
-
-  const {
-    data: rawHistoricalMessages = [],
     hasNextPage: hasMoreMessages,
     fetchNextPage: fetchOlderMessages,
     isFetchingNextPage: isFetchingOlderMessages,
@@ -114,41 +80,33 @@ export function App() {
     [selectedThreadId, messageAnchorCreatedAt],
   )
 
-  const { data: liveTailMessages = [] } = useLiveQuery(
-    (q) =>
-      q
-        .from({ message: messages })
-        .where(({ message }) =>
-          and(
-            eq(message.threadId, selectedThreadId),
-            gt(message.createdAt, messageAnchorCreatedAt),
-          ),
-        )
-        .orderBy(({ message }) => message.createdAt, "asc")
-        .orderBy(({ message }) => message.id, "asc"),
-    [selectedThreadId, messageAnchorCreatedAt],
-  )
-
-  const selectThread = useCallback((threadId: string) => {
-    setSelectedThreadId(threadId)
-    setThreadLookupId(threadId)
-    setMessageAnchorCreatedAt(Date.now())
-  }, [])
+  const [collectionVersion, setCollectionVersion] = useState(0)
 
   useEffect(() => {
-    if (rawThreads.length === 0 || selectedThread) {
-      return
-    }
+    const subscription = messages.subscribeChanges(
+      () => {
+        setCollectionVersion((version) => version + 1)
+      },
+      {
+        includeInitialState: true,
+        where: (message) => eq(message.threadId, selectedThreadId),
+      },
+    )
 
-    const nextThreadId = rawThreads[0]?.id
-    if (nextThreadId) {
-      selectThread(nextThreadId)
+    return () => {
+      subscription.unsubscribe()
     }
-  }, [rawThreads, selectedThread, selectThread])
+  }, [messages, selectedThreadId])
 
   const sortedMessages = useMemo(
-    () => [...rawHistoricalMessages].reverse().concat(liveTailMessages),
-    [rawHistoricalMessages, liveTailMessages],
+    () =>
+      messages.toArray
+        .filter((message) => message.threadId === selectedThreadId)
+        .sort(
+          (left, right) =>
+            left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+        ),
+    [messages, selectedThreadId, collectionVersion],
   )
 
   const loadOlderMessages = useCallback(() => {
@@ -184,26 +142,172 @@ export function App() {
     }
   }, [sortedMessages.length, selectedThreadId])
 
+  return (
+    <Card className="min-h-0 border border-border/60 shadow-none">
+      <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div>
+          <CardTitle>Messages</CardTitle>
+          <CardDescription>
+            History is loaded from Applecart and stays anchored to the moment
+            this thread was selected while streamed sends append in a live tail.
+          </CardDescription>
+        </div>
+        <CardAction className="flex items-center gap-2">
+          <Badge variant="secondary">{sortedMessages.length} loaded</Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadOlderMessages}
+            disabled={!hasMoreMessages || isFetchingOlderMessages}
+          >
+            {isFetchingOlderMessages ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <ArrowUp />
+            )}
+            {hasMoreMessages ? "Load older messages" : "No older messages"}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col">
+        <div
+          ref={scrollRef}
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto rounded-md border border-border bg-muted/15 p-3"
+        >
+          {sortedMessages.length === 0 ? (
+            <Card
+              size="sm"
+              className="border border-dashed border-border/80 bg-background shadow-none"
+            >
+              <CardContent className="py-6 text-center text-xs text-muted-foreground">
+                No messages loaded for this thread yet.
+              </CardContent>
+            </Card>
+          ) : (
+            sortedMessages.map((message) => (
+              <div
+                key={message.id}
+                className={[
+                  "max-w-[82%] rounded-lg border px-4 py-3 shadow-sm",
+                  message.role === "user"
+                    ? "ml-auto border-slate-300 bg-slate-100 text-slate-950"
+                    : message.role === "error"
+                      ? "mr-auto border-red-200 bg-red-50 text-red-950"
+                      : message.role === "tool" || message.role === "system"
+                        ? "mr-auto border-amber-200 bg-amber-50 text-amber-950"
+                        : "mr-auto border-slate-200 bg-white text-slate-900",
+                ].join(" ")}
+              >
+                <div
+                  className={[
+                    "flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.14em]",
+                    message.role === "user" ? "text-slate-500" : "text-slate-500",
+                  ].join(" ")}
+                >
+                  <span>{message.role}</span>
+                  <span>{formatTimestamp(message.createdAt)}</span>
+                  {message.status ? <span>{message.status}</span> : null}
+                </div>
+                <div className="mt-1 text-sm leading-6 whitespace-pre-wrap">
+                  {message.content}
+                </div>
+                {message.errorMessage ? (
+                  <div className="mt-2 text-xs text-red-700">
+                    {message.errorMessage}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function App() {
+  const db = getDB()
+  const threads = db.threads.collection
+  const messages = db.messages.collection
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
+  const [threadLookupId, setThreadLookupId] = useState("")
+  const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<
+    number | null
+  >(null)
+  const [newThreadTitle, setNewThreadTitle] = useState("")
+  const [messageInput, setMessageInput] = useState("")
+  const [displayFetchCount, setDisplayFetchCount] = useState(
+    db.messages.fetchCount,
+  )
+
   useEffect(() => {
-    const es = new EventSource("/api/events")
-    es.addEventListener("complete", (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        const msg = data.message
-        db.messages.addServer({
-          id: msg.id,
-          threadId: data.threadId,
-          role: msg.role,
-          content: msg.parts[0].content,
-          createdAt: msg.createdAt,
-        })
-      } catch (error) {
-        console.error("[SSE] parse error:", error)
-      }
-    })
-    es.onerror = () => console.warn("[SSE] connection error")
-    return () => es.close()
+    const interval = setInterval(() => {
+      setDisplayFetchCount(db.messages.fetchCount)
+    }, 500)
+    return () => clearInterval(interval)
   }, [db])
+
+  useEffect(() => {
+    ;(window as Window & { __appDb?: typeof db }).__appDb = db
+    return () => {
+      delete (window as Window & { __appDb?: typeof db }).__appDb
+    }
+  }, [db])
+
+  useEffect(() => {
+    ;(
+      window as Window & {
+        __appState?: {
+          selectedThreadId: string | null
+          messageAnchorCreatedAt: number | null
+        }
+      }
+    ).__appState = {
+      selectedThreadId,
+      messageAnchorCreatedAt,
+    }
+  }, [selectedThreadId, messageAnchorCreatedAt])
+
+  const {
+    data: rawThreads = [],
+    hasNextPage: hasMoreThreads,
+    fetchNextPage: fetchMoreThreads,
+    isFetchingNextPage: isFetchingMoreThreads,
+  } = useLiveInfiniteQuery(
+    (q) =>
+      q
+        .from({ thread: threads })
+        .orderBy(({ thread }) => thread.updatedAt, "desc")
+        .orderBy(({ thread }) => thread.id, "desc"),
+    { pageSize: 2 },
+    [],
+  )
+
+  const selectedThread = useMemo(
+    () =>
+      selectedThreadId
+        ? rawThreads.find((thread) => thread.id === selectedThreadId) ??
+          threads.get(selectedThreadId)
+        : undefined,
+    [rawThreads, selectedThreadId, threads],
+  )
+
+  const selectThread = useCallback((threadId: string) => {
+    setSelectedThreadId(threadId)
+    setThreadLookupId(threadId)
+    setMessageAnchorCreatedAt(Date.now())
+  }, [])
+
+  useEffect(() => {
+    if (rawThreads.length === 0 || selectedThread) {
+      return
+    }
+
+    const nextThreadId = rawThreads[0]?.id
+    if (nextThreadId) {
+      selectThread(nextThreadId)
+    }
+  }, [rawThreads, selectedThread, selectThread])
 
   const handleCreateThread = () => {
     const title = newThreadTitle.trim()
@@ -227,7 +331,7 @@ export function App() {
 
   const handleSend = () => {
     const content = messageInput.trim()
-    if (!content) {
+    if (!content || !selectedThreadId) {
       return
     }
 
@@ -418,8 +522,10 @@ export function App() {
                       Current route
                     </div>
                     <div className="font-mono text-[0.7rem] text-muted-foreground">
-                      <span className="truncate">/api/threads/</span>
-                      <span className="truncate">{selectedThreadId}</span>
+                      <span className="truncate">/api/applecart/threads/</span>
+                      <span className="truncate">
+                        {selectedThreadId ?? "select-a-thread"}
+                      </span>
                       <span className="truncate">/messages</span>
                     </div>
                   </div>
@@ -427,81 +533,23 @@ export function App() {
               </CardHeader>
             </Card>
 
-            <Card className="min-h-0 border border-border/60 shadow-none">
-              <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                <div>
+            {selectedThreadId && messageAnchorCreatedAt != null ? (
+              <ThreadMessagesPanel
+                key={selectedThreadId}
+                messages={messages}
+                selectedThreadId={selectedThreadId}
+                messageAnchorCreatedAt={messageAnchorCreatedAt}
+              />
+            ) : (
+              <Card className="min-h-0 border border-border/60 shadow-none">
+                <CardHeader>
                   <CardTitle>Messages</CardTitle>
                   <CardDescription>
-                    History stays anchored to the moment this thread was
-                    selected while new messages append in a live tail.
+                    Select a thread to load its message history.
                   </CardDescription>
-                </div>
-                <CardAction className="flex items-center gap-2">
-                  <Badge variant="secondary">
-                    {sortedMessages.length} loaded
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={loadOlderMessages}
-                    disabled={!hasMoreMessages || isFetchingOlderMessages}
-                  >
-                    {isFetchingOlderMessages ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <ArrowUp />
-                    )}
-                    {hasMoreMessages
-                      ? "Load older messages"
-                      : "No older messages"}
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="flex min-h-0 flex-1 flex-col">
-                <div
-                  ref={scrollRef}
-                  className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto rounded-md border border-border bg-muted/15 p-3"
-                >
-                  {sortedMessages.length === 0 ? (
-                    <Card
-                      size="sm"
-                      className="border border-dashed border-border/80 bg-background shadow-none"
-                    >
-                      <CardContent className="py-6 text-center text-xs text-muted-foreground">
-                        No messages loaded for this thread yet.
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    sortedMessages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={[
-                          "max-w-[82%] rounded-lg border px-4 py-3 shadow-sm",
-                          message.role === "user"
-                            ? "ml-auto border-slate-300 bg-slate-100 text-slate-950"
-                            : "mr-auto border-slate-200 bg-white text-slate-900",
-                        ].join(" ")}
-                      >
-                        <div
-                          className={[
-                            "flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.14em]",
-                            message.role === "user"
-                              ? "text-slate-500"
-                              : "text-slate-500",
-                          ].join(" ")}
-                        >
-                          <span>{message.role}</span>
-                          <span>{formatTimestamp(message.createdAt)}</span>
-                        </div>
-                        <div className="mt-1 text-sm leading-6 whitespace-pre-wrap">
-                          {message.content}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+              </Card>
+            )}
 
             <Card className="border border-border/60 shadow-none" size="sm">
               <CardHeader>
@@ -510,12 +558,13 @@ export function App() {
                   <CardTitle>Composer</CardTitle>
                 </div>
                 <CardDescription>
-                  Posts to `/api/threads/{selectedThreadId}/messages`.
+                  Streams Applecart `sendMessage` through
+                  `/api/applecart/threads/{selectedThreadId}/responses`.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
                 <Textarea
-                  placeholder="Type a message to create server activity for this thread..."
+                  placeholder="Type a message to stream a real Applecart response for this thread..."
                   value={messageInput}
                   onChange={(event) => setMessageInput(event.target.value)}
                   onKeyDown={(event) => {
@@ -532,7 +581,9 @@ export function App() {
                   <div className="text-xs text-muted-foreground">
                     Cmd/Ctrl + Enter sends the message.
                   </div>
-                  <Button onClick={handleSend}>Send message</Button>
+                  <Button onClick={handleSend} disabled={!selectedThreadId}>
+                    Send message
+                  </Button>
                 </div>
               </CardContent>
             </Card>

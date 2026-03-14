@@ -8,7 +8,11 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
   return response.json() as Promise<T>
 }
 
-export async function persist<T>(url: string, method: string, body?: unknown): Promise<T> {
+export async function persist<T>(
+  url: string,
+  method: string,
+  body?: unknown,
+): Promise<T> {
   const init: RequestInit = {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
