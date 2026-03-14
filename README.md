@@ -1,14 +1,34 @@
-# TanStack DB pagination repro
+# TanStack DB v3 integration sandbox
 
-This repo is a small chat-style repro app for debugging TanStack DB pagination behavior against real Notion chat data.
+This repo is a small chat-style app for validating TanStack DB integration patterns against real Notion chat data.
 
-The app now reads:
+The current `v3` branch is focused on getting the architecture right:
+
+- threading real Notion data through a local proxy
+- separating API transport from TanStack DB collection logic
+- validating message history + live-tail behavior
+- exercising streamed sends and recovery behavior
+
+It is **not** primarily a pagination bug repro branch.
+
+The app reads:
 
 - threads from Notion
 - messages from Notion
 - streamed assistant responses from Notion
 
 It does **not** use server-side SQLite as the source of truth for chat data.
+
+## Purpose
+
+Use this app when you want to study or debug:
+
+- how threads and messages should be fetched and mapped into TanStack DB
+- how streamed assistant responses should update local state
+- where transport concerns should live versus collection/store concerns
+- how the current architecture behaves under reloads, thread switches, and live sends
+
+Do **not** treat this branch as a minimal pagination regression harness. That was the earlier direction of the repo, but `v3` is now centered on architecture and integration correctness.
 
 ## Run the app
 
