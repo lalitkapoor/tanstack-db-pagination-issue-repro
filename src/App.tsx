@@ -9,7 +9,9 @@ import React, {
 import {
   and,
   eq,
+  gt,
   lte,
+  useLiveQuery,
   useLiveInfiniteQuery,
 } from "@tanstack/react-db"
 import {
@@ -61,6 +63,7 @@ function ThreadMessagesPanel(props: {
   const prevScrollHeightRef = useRef(0)
 
   const {
+    data: historyMessages = [],
     hasNextPage: hasMoreMessages,
     fetchNextPage: fetchOlderMessages,
     isFetchingNextPage: isFetchingOlderMessages,
@@ -80,33 +83,35 @@ function ThreadMessagesPanel(props: {
     [selectedThreadId, messageAnchorCreatedAt],
   )
 
-  const [collectionVersion, setCollectionVersion] = useState(0)
-
-  useEffect(() => {
-    const subscription = messages.subscribeChanges(
-      () => {
-        setCollectionVersion((version) => version + 1)
-      },
-      {
-        includeInitialState: true,
-        where: (message) => eq(message.threadId, selectedThreadId),
-      },
-    )
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [messages, selectedThreadId])
+  const { data: liveMessages = [] } = useLiveQuery(
+    (q) =>
+      q
+        .from({ message: messages })
+        .where(({ message }) =>
+          and(
+            eq(message.threadId, selectedThreadId),
+            gt(message.createdAt, messageAnchorCreatedAt),
+          ),
+        )
+        .orderBy(({ message }) => message.createdAt, "asc")
+        .orderBy(({ message }) => message.id, "asc"),
+    [selectedThreadId, messageAnchorCreatedAt],
+  )
 
   const sortedMessages = useMemo(
     () =>
-      messages.toArray
-        .filter((message) => message.threadId === selectedThreadId)
+      [...historyMessages, ...liveMessages]
+        .filter(
+          (message, index, allMessages) =>
+            allMessages.findIndex(
+              (candidate) => candidate.id === message.id,
+            ) === index,
+        )
         .sort(
           (left, right) =>
             left.createdAt - right.createdAt || left.id.localeCompare(right.id),
         ),
-    [messages, selectedThreadId, collectionVersion],
+    [historyMessages, liveMessages],
   )
 
   const loadOlderMessages = useCallback(() => {
