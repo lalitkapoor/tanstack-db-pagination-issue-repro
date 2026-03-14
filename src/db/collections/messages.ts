@@ -329,7 +329,6 @@ export class MessagesStore {
           })
           throw new Error(event.error.message)
         case "done":
-          await this.collection.utils.refetch()
           return
       }
     }
