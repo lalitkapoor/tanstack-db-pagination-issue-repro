@@ -259,6 +259,7 @@ export class MessagesStore {
     content: string
     optimisticMessageId: string
     threadId: string
+    signal?: AbortSignal
   }) {
     let replacedOptimisticUserMessage = false
     const pendingTextByMessageId = new Map<string, string>()
@@ -267,6 +268,7 @@ export class MessagesStore {
     for await (const event of this.api.messages.send({
       content: args.content,
       idempotencyKey: args.optimisticMessageId,
+      signal: args.signal,
       threadId: args.threadId,
     })) {
       switch (event.type) {
@@ -396,7 +398,13 @@ export class MessagesStore {
     return this.internalFetchCount
   }
 
-  public add(content: string, threadId: string) {
+  public add(
+    content: string,
+    threadId: string,
+    options?: {
+      signal?: AbortSignal
+    },
+  ) {
     const id = crypto.randomUUID()
     this.collection.utils.writeInsert({
       id,
@@ -410,8 +418,13 @@ export class MessagesStore {
     void this.streamMessageResponse({
       content,
       optimisticMessageId: id,
+      signal: options?.signal,
       threadId,
     }).catch((error) => {
+      if (error instanceof Error && error.name === "AbortError") {
+        return
+      }
+
       const errorMessage =
         error instanceof Error ? error.message : "Applecart send failed"
 

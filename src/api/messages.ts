@@ -164,11 +164,13 @@ export class MessagesApi {
     content: string
     threadId: string
     idempotencyKey: string
+    signal?: AbortSignal
   }): AsyncGenerator<ChatResponseStreamEvent, void, undefined> {
     const response = await fetch(
       `/api/applecart/threads/${args.threadId}/responses`,
       {
         method: "POST",
+        signal: args.signal,
         headers: {
           Authorization: `Bearer ${this.getApiToken()}`,
           Accept: "application/x-ndjson",
