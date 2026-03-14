@@ -79,7 +79,7 @@ function ThreadMessagesPanel(props: {
         )
         .orderBy(({ message }) => message.createdAt, "desc")
         .orderBy(({ message }) => message.id, "desc"),
-    { pageSize: 50 },
+    { pageSize: 25 },
     [selectedThreadId, messageAnchorCreatedAt],
   )
 

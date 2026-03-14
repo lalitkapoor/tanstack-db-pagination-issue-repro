@@ -51,17 +51,12 @@ export class MessagesStore {
     MessagesStore["createCollection"]
   > | null = null
   private internalFetchCount = 0
-  private readonly historyCursorByBoundary = new Map<string, string | null>()
 
   constructor(
     private readonly queryClient: QueryClient,
     private readonly databaseContext: DatabaseContext,
     private readonly api: Api,
   ) {}
-
-  private getHistoryBoundaryKey(createdAt: number, id: string) {
-    return `${createdAt}:${id}`
-  }
 
   private assertNeverMessageRole(message: never): never {
     throw new Error(`Unhandled message role: ${JSON.stringify(message)}`)
@@ -234,21 +229,12 @@ export class MessagesStore {
   private async fetchHistoryPage(args: {
     threadId: string
     limit: number
-    cursor?: string
+    beforeCreatedAt?: number
+    beforeId?: string
   }) {
     const response = await this.api.messages.list(args)
 
-    const rows = response.data
-      .map((message) => this.toMessageRow(message))
-      .reverse()
-    for (const row of rows) {
-      this.historyCursorByBoundary.set(
-        this.getHistoryBoundaryKey(row.createdAt, row.id),
-        response.nextCursor ?? null,
-      )
-    }
-
-    return rows
+    return response.data.map((message) => this.toMessageRow(message)).reverse()
   }
 
   private replaceOptimisticMessage(args: {
@@ -358,31 +344,11 @@ export class MessagesStore {
 
     this.internalFetchCount++
 
-    let cursor: string | undefined
-    if (query.beforeCreatedAt != null && query.beforeId != null) {
-      const boundaryKey = this.getHistoryBoundaryKey(
-        query.beforeCreatedAt,
-        query.beforeId,
-      )
-
-      if (!this.historyCursorByBoundary.has(boundaryKey)) {
-        throw new Error(
-          `Missing Applecart nextCursor for history boundary ${query.beforeCreatedAt}:${query.beforeId}`,
-        )
-      }
-
-      const nextCursor = this.historyCursorByBoundary.get(boundaryKey)
-      if (!nextCursor) {
-        return []
-      }
-
-      cursor = nextCursor
-    }
-
     return this.fetchHistoryPage({
       threadId: query.threadId,
       limit: query.limit,
-      cursor,
+      beforeCreatedAt: query.beforeCreatedAt,
+      beforeId: query.beforeId,
     })
   }
 

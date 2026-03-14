@@ -61,6 +61,19 @@ export type ChatResponseStreamEvent =
     }
 
 export class MessagesApi {
+  private encodeHistoryCursor(args: { createdAt: number; id: string }) {
+    return btoa(
+      JSON.stringify({
+        version: 1,
+        timestamp: args.createdAt,
+        id: args.id,
+      }),
+    )
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "")
+  }
+
   public isErrorThreadMessage(
     message: ThreadMessage,
   ): message is ErrorThreadMessage {
@@ -120,14 +133,21 @@ export class MessagesApi {
   public async list(args: {
     threadId: string
     limit: number
-    cursor?: string
+    beforeCreatedAt?: number
+    beforeId?: string
   }) {
     const params = new URLSearchParams({
       limit: String(args.limit),
     })
 
-    if (args.cursor) {
-      params.set("cursor", args.cursor)
+    if (args.beforeCreatedAt != null && args.beforeId != null) {
+      params.set(
+        "cursor",
+        this.encodeHistoryCursor({
+          createdAt: args.beforeCreatedAt,
+          id: args.beforeId,
+        }),
+      )
     }
 
     return fetchJson<ListThreadMessagesResponse>(
