@@ -1,7 +1,8 @@
 import React from "react"
 import { createRoot } from "react-dom/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { initDB } from "./db"
+import { AppRuntimeProvider } from "./app-runtime"
+import { initAppRuntime, type AppRuntime } from "./db"
 import { App } from "./App"
 import "./index.css"
 
@@ -15,14 +16,14 @@ const queryClient = new QueryClient({
 })
 
 function Root() {
-  const [ready, setReady] = React.useState(false)
+  const [runtime, setRuntime] = React.useState<AppRuntime | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    initDB(queryClient)
-      .then(() => setReady(true))
+    initAppRuntime(queryClient)
+      .then((resolvedRuntime) => setRuntime(resolvedRuntime))
       .catch((err) => {
-        console.error("initDB failed:", err)
+        console.error("initAppRuntime failed:", err)
         setError(String(err))
       })
   }, [])
@@ -36,13 +37,15 @@ function Root() {
     )
   }
 
-  if (!ready) {
-    return <div style={{ padding: 20 }}>Initializing TanStack DB...</div>
+  if (!runtime) {
+    return <div style={{ padding: 20 }}>Initializing app runtime...</div>
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <App />
+      <AppRuntimeProvider runtime={runtime}>
+        <App />
+      </AppRuntimeProvider>
     </QueryClientProvider>
   )
 }

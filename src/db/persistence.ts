@@ -53,7 +53,7 @@ let _databaseContext: DatabaseContext | null = null
 let _sqliteDatabase: Awaited<ReturnType<typeof openBrowserWASQLiteOPFSDatabase>> | null =
   null
 
-export async function initPersistence() {
+export async function getOrCreateDatabaseContext() {
   if (_databaseContext) {
     return _databaseContext
   }
