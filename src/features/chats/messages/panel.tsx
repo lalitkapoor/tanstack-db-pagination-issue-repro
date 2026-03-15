@@ -1,7 +1,7 @@
-import type { getDB } from "~/db"
+import type { AppRuntime } from "~/db"
 import { TranscriptPanel } from "./transcript-panel"
 
-type MessagesCollection = ReturnType<typeof getDB>["messages"]["collection"]
+type MessagesCollection = AppRuntime["messages"]["collection"]
 
 export function MessagesPanel(props: {
   messages: MessagesCollection

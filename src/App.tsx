@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { RefreshCcw } from "lucide-react"
+import { useAppRuntime } from "~/app-runtime"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
@@ -9,28 +10,28 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import { getDB, resetDatabase } from "~/db"
+import { resetDatabase, type AppRuntime } from "~/db"
 import { ThreadsWorkspace } from "~/features/chats/threads/workspace"
 
 export function App() {
-  const db = getDB()
+  const runtime = useAppRuntime()
   const [displayFetchCount, setDisplayFetchCount] = useState(
-    db.messages.fetchCount,
+    runtime.messages.fetchCount,
   )
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDisplayFetchCount(db.messages.fetchCount)
+      setDisplayFetchCount(runtime.messages.fetchCount)
     }, 500)
     return () => clearInterval(interval)
-  }, [db])
+  }, [runtime])
 
   useEffect(() => {
-    ;(window as Window & { __appDb?: typeof db }).__appDb = db
+    ;(window as Window & { __appRuntime?: AppRuntime }).__appRuntime = runtime
     return () => {
-      delete (window as Window & { __appDb?: typeof db }).__appDb
+      delete (window as Window & { __appRuntime?: AppRuntime }).__appRuntime
     }
-  }, [db])
+  }, [runtime])
 
   return (
     <div className="box-border h-dvh overflow-hidden bg-background px-3 py-3 text-foreground sm:px-4 lg:px-6">
@@ -61,7 +62,7 @@ export function App() {
           </CardHeader>
         </Card>
 
-        <ThreadsWorkspace db={db} />
+        <ThreadsWorkspace />
       </div>
     </div>
   )

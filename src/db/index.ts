@@ -12,7 +12,7 @@ type CleanupTarget = {
   cleanup(): Promise<void>
 }
 
-class AppDB {
+export class AppRuntime {
   public readonly api: Api
   public readonly messages: MessagesStore
   public readonly threads: ThreadsStore
@@ -44,35 +44,27 @@ class AppDB {
   }
 }
 
-let _db: AppDB | null = null
+let _runtime: AppRuntime | null = null
 
-export async function initDB(queryClient: QueryClient) {
-  if (_db) {
-    return _db
+export async function initAppRuntime(queryClient: QueryClient) {
+  if (_runtime) {
+    return _runtime
   }
 
   const databaseContext = await initPersistence()
 
-  _db = new AppDB(queryClient, databaseContext)
-  await _db.init()
+  _runtime = new AppRuntime(queryClient, databaseContext)
+  await _runtime.init()
 
-  return _db
-}
-
-export function getDB() {
-  if (!_db) {
-    throw new Error("DB not initialized")
-  }
-
-  return _db
+  return _runtime
 }
 
 export async function resetDatabase() {
-  const db = _db
-  _db = null
+  const runtime = _runtime
+  _runtime = null
 
-  if (db) {
-    await db.cleanup()
+  if (runtime) {
+    await runtime.cleanup()
   }
 
   await resetPersistenceStorage()

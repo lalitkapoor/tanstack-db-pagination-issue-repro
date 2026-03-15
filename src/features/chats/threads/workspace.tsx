@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLiveInfiniteQuery } from "@tanstack/react-db"
-import type { getDB } from "~/db"
+import { useAppRuntime } from "~/app-runtime"
 import { ComposerPanel } from "../messages/composer-panel"
 import { ControlsPanel } from "./controls-panel"
 import { ListPanel } from "./list-panel"
 import { SelectedThreadShell } from "./selected-thread-shell"
 
-type AppDB = ReturnType<typeof getDB>
-
-export function ThreadsWorkspace(props: {
-  db: AppDB
-}) {
-  const { db } = props
-  const threads = db.threads.collection
-  const messages = db.messages.collection
+export function ThreadsWorkspace() {
+  const runtime = useAppRuntime()
+  const threads = runtime.threads.collection
+  const messages = runtime.messages.collection
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [threadLookupId, setThreadLookupId] = useState("")
   const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<
@@ -83,7 +79,7 @@ export function ThreadsWorkspace(props: {
       return
     }
 
-    const id = db.threads.add(title)
+    const id = runtime.threads.add(title)
     setNewThreadTitle("")
     selectThread(id)
   }
@@ -103,7 +99,7 @@ export function ThreadsWorkspace(props: {
       return
     }
 
-    db.messages.add(content, selectedThreadId)
+    runtime.messages.add(content, selectedThreadId)
     setMessageInput("")
   }
 
