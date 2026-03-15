@@ -15,13 +15,14 @@ import { ThreadsWorkspace } from "~/features/chats/threads/workspace"
 
 export function App() {
   const runtime = useAppRuntime()
+  const messages = runtime.data.messages.get()
   const [displayFetchCount, setDisplayFetchCount] = useState(
-    runtime.messages.fetchCount,
+    messages.store.fetchCount,
   )
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDisplayFetchCount(runtime.messages.fetchCount)
+      setDisplayFetchCount(runtime.data.messages.get().store.fetchCount)
     }, 500)
     return () => clearInterval(interval)
   }, [runtime])

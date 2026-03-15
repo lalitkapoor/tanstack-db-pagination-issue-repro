@@ -1,6 +1,6 @@
 import { Badge } from "~/components/ui/badge"
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import type { AppRuntime } from "~/db"
+import type { MessagesCollection } from "~/db/data/messages"
 import { formatTimestamp } from "~/lib/format-timestamp"
 import { MessagesPanel } from "../messages/panel"
 
@@ -9,8 +9,6 @@ type ThreadRecord = {
   title: string
   updatedAt: number
 }
-
-type MessagesCollection = AppRuntime["messages"]["collection"]
 
 export function SelectedThreadShell(props: {
   selectedThreadId: string | null

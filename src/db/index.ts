@@ -1,46 +1,42 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { Api } from "../api"
-import {
-  initPersistence,
-  resetPersistenceStorage,
-  type DatabaseContext,
-} from "./persistence"
-import { MessagesStore } from "./collections/messages"
-import { ThreadsStore } from "./collections/threads"
-
-type CleanupTarget = {
-  cleanup(): Promise<void>
-}
+import { createMessagesDataHandle } from "./data/messages"
+import { createThreadsDataHandle } from "./data/threads"
+import { getOrCreateDatabaseContext, resetPersistenceStorage } from "./persistence"
 
 export class AppRuntime {
   public readonly api: Api
-  public readonly messages: MessagesStore
-  public readonly threads: ThreadsStore
-  private cleanupTargets: CleanupTarget[] = []
+  public readonly data
 
-  constructor(queryClient: QueryClient, databaseContext: DatabaseContext) {
+  constructor(public readonly queryClient: QueryClient) {
     this.api = new Api()
-    this.messages = new MessagesStore(queryClient, databaseContext, this.api)
-    this.threads = new ThreadsStore(queryClient, databaseContext, this.api)
+    this.data = {
+      messages: createMessagesDataHandle({
+        queryClient,
+        api: this.api,
+        getOrCreateDatabaseContext,
+      }),
+      threads: createThreadsDataHandle({
+        queryClient,
+        api: this.api,
+        getOrCreateDatabaseContext,
+      }),
+    }
   }
 
   public async init() {
-    const [messagesCollection, threadsCollection] = await Promise.all([
-      this.messages.init(),
-      this.threads.init(),
+    await Promise.all([
+      this.data.messages.getOrCreate(),
+      this.data.threads.getOrCreate(),
     ])
-
-    this.cleanupTargets = [messagesCollection, threadsCollection]
     return this
   }
 
   public async cleanup() {
-    const cleanupTargets = this.cleanupTargets
-    this.cleanupTargets = []
-
-    await Promise.allSettled(
-      cleanupTargets.map((collection) => collection.cleanup()),
-    )
+    await Promise.allSettled([
+      this.data.messages.cleanup(),
+      this.data.threads.cleanup(),
+    ])
   }
 }
 
@@ -51,9 +47,9 @@ export async function initAppRuntime(queryClient: QueryClient) {
     return _runtime
   }
 
-  const databaseContext = await initPersistence()
+  await getOrCreateDatabaseContext()
 
-  _runtime = new AppRuntime(queryClient, databaseContext)
+  _runtime = new AppRuntime(queryClient)
   await _runtime.init()
 
   return _runtime

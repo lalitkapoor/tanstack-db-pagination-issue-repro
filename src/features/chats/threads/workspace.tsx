@@ -8,8 +8,8 @@ import { SelectedThreadShell } from "./selected-thread-shell"
 
 export function ThreadsWorkspace() {
   const runtime = useAppRuntime()
-  const threads = runtime.threads.collection
-  const messages = runtime.messages.collection
+  const threads = runtime.data.threads.get()
+  const messages = runtime.data.messages.get()
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [threadLookupId, setThreadLookupId] = useState("")
   const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<
@@ -40,7 +40,7 @@ export function ThreadsWorkspace() {
   } = useLiveInfiniteQuery(
     (q) =>
       q
-        .from({ thread: threads })
+        .from({ thread: threads.collection })
         .orderBy(({ thread }) => thread.updatedAt, "desc")
         .orderBy(({ thread }) => thread.id, "desc"),
     { pageSize: 2 },
@@ -51,7 +51,7 @@ export function ThreadsWorkspace() {
     () =>
       selectedThreadId
         ? rawThreads.find((thread) => thread.id === selectedThreadId) ??
-          threads.get(selectedThreadId)
+          threads.collection.get(selectedThreadId)
         : undefined,
     [rawThreads, selectedThreadId, threads],
   )
@@ -79,7 +79,7 @@ export function ThreadsWorkspace() {
       return
     }
 
-    const id = runtime.threads.add(title)
+    const id = threads.store.add(title)
     setNewThreadTitle("")
     selectThread(id)
   }
@@ -99,7 +99,7 @@ export function ThreadsWorkspace() {
       return
     }
 
-    runtime.messages.add(content, selectedThreadId)
+    messages.store.add(content, selectedThreadId)
     setMessageInput("")
   }
 
@@ -129,7 +129,7 @@ export function ThreadsWorkspace() {
           selectedThreadId={selectedThreadId}
           selectedThread={selectedThread}
           messageAnchorCreatedAt={messageAnchorCreatedAt}
-          messages={messages}
+          messages={messages.collection}
         />
         <div>
           <ComposerPanel

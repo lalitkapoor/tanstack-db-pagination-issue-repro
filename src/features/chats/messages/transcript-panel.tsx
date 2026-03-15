@@ -11,10 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import type { AppRuntime } from "~/db"
+import type { MessagesCollection } from "~/db/data/messages"
 import { formatTimestamp } from "~/lib/format-timestamp"
-
-type MessagesCollection = AppRuntime["messages"]["collection"]
 
 export function TranscriptPanel(props: {
   messages: MessagesCollection
