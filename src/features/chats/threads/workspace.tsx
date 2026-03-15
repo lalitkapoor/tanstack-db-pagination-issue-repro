@@ -10,7 +10,7 @@ export function ThreadsWorkspace() {
   const runtime = useAppRuntime()
   const threads = runtime.data.collections.threads
   const messages = runtime.data.collections.messages
-  const db = runtime.data.stores
+  const stores = runtime.data.stores
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [threadLookupId, setThreadLookupId] = useState("")
   const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<
@@ -80,7 +80,7 @@ export function ThreadsWorkspace() {
       return
     }
 
-    const id = db.threads.add(title)
+    const id = stores.threads.add(title)
     setNewThreadTitle("")
     selectThread(id)
   }
@@ -100,7 +100,7 @@ export function ThreadsWorkspace() {
       return
     }
 
-    db.messages.add(content, selectedThreadId)
+    stores.messages.add(content, selectedThreadId)
     setMessageInput("")
   }
 
