@@ -11,18 +11,19 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { resetDatabase, type AppRuntime } from "~/db"
+import { ChatsReadBoundary } from "~/features/chats/read-boundary"
 import { ThreadsWorkspace } from "~/features/chats/threads/workspace"
 
 export function App() {
   const runtime = useAppRuntime()
-  const messages = runtime.data.messages.get()
+  const messagesStore = runtime.data.stores.messages
   const [displayFetchCount, setDisplayFetchCount] = useState(
-    messages.store.fetchCount,
+    messagesStore.fetchCount,
   )
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDisplayFetchCount(runtime.data.messages.get().store.fetchCount)
+      setDisplayFetchCount(runtime.data.stores.messages.fetchCount)
     }, 500)
     return () => clearInterval(interval)
   }, [runtime])
@@ -63,7 +64,9 @@ export function App() {
           </CardHeader>
         </Card>
 
-        <ThreadsWorkspace />
+        <ChatsReadBoundary>
+          <ThreadsWorkspace />
+        </ChatsReadBoundary>
       </div>
     </div>
   )

@@ -19,6 +19,10 @@ export function createThreadsDataHandle(args: {
   let resolvedResource: ThreadsData | null = null
 
   return {
+    isReady() {
+      return resolvedResource !== null
+    },
+
     async getOrCreate(): Promise<ThreadsData> {
       if (!resourcePromise) {
         resourcePromise = (async () => {
@@ -42,7 +46,7 @@ export function createThreadsDataHandle(args: {
       return resourcePromise
     },
 
-    get(): ThreadsData {
+    getReady(): ThreadsData {
       if (!resolvedResource) {
         throw new Error("Threads data not initialized")
       }

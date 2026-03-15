@@ -19,6 +19,10 @@ export function createMessagesDataHandle(args: {
   let resolvedResource: MessagesData | null = null
 
   return {
+    isReady() {
+      return resolvedResource !== null
+    },
+
     async getOrCreate(): Promise<MessagesData> {
       if (!resourcePromise) {
         resourcePromise = (async () => {
@@ -42,7 +46,7 @@ export function createMessagesDataHandle(args: {
       return resourcePromise
     },
 
-    get(): MessagesData {
+    getReady(): MessagesData {
       if (!resolvedResource) {
         throw new Error("Messages data not initialized")
       }
