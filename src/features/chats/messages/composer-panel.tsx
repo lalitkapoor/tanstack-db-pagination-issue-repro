@@ -14,6 +14,7 @@ export function ComposerPanel(props: {
   messageInput: string
   onMessageInputChange: (value: string) => void
   onSend: () => void
+  disabled?: boolean
 }) {
   return (
     <Card className="border border-border/60 shadow-none" size="sm">
@@ -31,6 +32,7 @@ export function ComposerPanel(props: {
         <Textarea
           placeholder="Type a message to stream a real Applecart response for this thread..."
           value={props.messageInput}
+          disabled={props.disabled}
           onChange={(event) => props.onMessageInputChange(event.target.value)}
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -43,7 +45,10 @@ export function ComposerPanel(props: {
           <div className="text-xs text-muted-foreground">
             Cmd/Ctrl + Enter sends the message.
           </div>
-          <Button onClick={props.onSend} disabled={!props.selectedThreadId}>
+          <Button
+            onClick={props.onSend}
+            disabled={props.disabled || !props.selectedThreadId}
+          >
             Send message
           </Button>
         </div>

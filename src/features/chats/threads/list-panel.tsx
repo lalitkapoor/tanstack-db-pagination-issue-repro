@@ -1,4 +1,4 @@
-import { ArrowDown, LoaderCircle } from "lucide-react"
+import { ArrowDown } from "lucide-react"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
@@ -72,11 +72,7 @@ export function ListPanel(props: {
           onClick={props.onLoadOlderThreads}
           disabled={!props.hasMoreThreads || props.isFetchingMoreThreads}
         >
-          {props.isFetchingMoreThreads ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            <ArrowDown />
-          )}
+          <ArrowDown />
           {props.hasMoreThreads ? "Load older threads" : "No older threads"}
         </Button>
       </CardContent>

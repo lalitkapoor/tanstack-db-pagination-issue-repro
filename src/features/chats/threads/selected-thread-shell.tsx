@@ -1,5 +1,11 @@
 import { Badge } from "~/components/ui/badge"
-import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card"
 import type { MessagesCollection } from "~/db/data/messages"
 import { formatTimestamp } from "~/lib/format-timestamp"
 import { MessagesPanel } from "../messages/panel"

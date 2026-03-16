@@ -1,8 +1,13 @@
 import React from "react"
 import { createRoot } from "react-dom/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { AppFrame } from "./app-frame"
 import { AppRuntimeProvider } from "./app-runtime"
 import { initAppRuntime, type AppRuntime } from "./db"
+import { ComposerPanel } from "./features/chats/messages/composer-panel"
+import { ControlsPanel } from "./features/chats/threads/controls-panel"
+import { ListPanel } from "./features/chats/threads/list-panel"
+import { SelectedThreadShell } from "./features/chats/threads/selected-thread-shell"
 import { App } from "./App"
 import "./index.css"
 
@@ -14,6 +19,47 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+function AppBootShell() {
+  return (
+    <AppFrame fetchCount="--" resetDisabled>
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
+          <ControlsPanel
+            newThreadTitle=""
+            threadLookupId=""
+            onNewThreadTitleChange={() => {}}
+            onThreadLookupIdChange={() => {}}
+            onCreateThread={() => {}}
+            onLoadThreadById={() => {}}
+            disabled
+          />
+          <ListPanel
+            threads={[]}
+            selectedThreadId={null}
+            hasMoreThreads={false}
+            isFetchingMoreThreads={false}
+            onSelectThread={() => {}}
+            onLoadOlderThreads={() => {}}
+          />
+        </div>
+
+        <div className="grid min-h-0 gap-3 lg:grid-rows-[minmax(0,1fr)_auto]">
+          <SelectedThreadShell selectedThreadId={null} messageAnchorCreatedAt={null} />
+          <div>
+            <ComposerPanel
+              selectedThreadId={null}
+              messageInput=""
+              onMessageInputChange={() => {}}
+              onSend={() => {}}
+              disabled
+            />
+          </div>
+        </div>
+      </div>
+    </AppFrame>
+  )
+}
 
 function Root() {
   const [runtime, setRuntime] = React.useState<AppRuntime | null>(null)
@@ -38,7 +84,7 @@ function Root() {
   }
 
   if (!runtime) {
-    return <div style={{ padding: 20 }}>Initializing app runtime...</div>
+    return <AppBootShell />
   }
 
   return (

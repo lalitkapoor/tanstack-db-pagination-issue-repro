@@ -115,7 +115,7 @@ export function TranscriptPanel(props: {
   return (
     <Card className="min-h-0 border border-border/60 shadow-none">
       <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-        <div>
+        <div className="max-w-2xl">
           <CardTitle>Messages</CardTitle>
           <CardDescription>
             History is loaded from Applecart and stays anchored to the moment
@@ -155,34 +155,34 @@ export function TranscriptPanel(props: {
             </Card>
           ) : (
             sortedMessages.map((message) => (
-              <div
-                key={message.id}
-                className={[
-                  "max-w-[82%] rounded-lg border px-4 py-3 shadow-sm",
-                  message.role === "user"
-                    ? "ml-auto border-slate-300 bg-slate-100 text-slate-950"
-                    : message.role === "error"
-                      ? "mr-auto border-red-200 bg-red-50 text-red-950"
-                      : message.role === "tool" || message.role === "system"
-                        ? "mr-auto border-amber-200 bg-amber-50 text-amber-950"
-                        : "mr-auto border-slate-200 bg-white text-slate-900",
-                ].join(" ")}
-              >
-                <div className="flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.14em] text-slate-500">
-                  <span>{message.role}</span>
-                  <span>{formatTimestamp(message.createdAt)}</span>
-                  {message.status ? <span>{message.status}</span> : null}
-                </div>
-                <div className="mt-1 text-sm leading-6 whitespace-pre-wrap">
-                  {message.content}
-                </div>
-                {message.errorMessage ? (
-                  <div className="mt-2 text-xs text-red-700">
-                    {message.errorMessage}
+                <div
+                  key={message.id}
+                  className={[
+                    "max-w-[82%] rounded-lg border px-4 py-3 shadow-sm",
+                    message.role === "user"
+                      ? "ml-auto border-slate-300 bg-slate-100 text-slate-950"
+                      : message.role === "error"
+                        ? "mr-auto border-red-200 bg-red-50 text-red-950"
+                        : message.role === "tool" || message.role === "system"
+                          ? "mr-auto border-amber-200 bg-amber-50 text-amber-950"
+                          : "mr-auto border-slate-200 bg-white text-slate-900",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center gap-2 text-[0.65rem] uppercase tracking-[0.14em] text-slate-500">
+                    <span>{message.role}</span>
+                    <span>{formatTimestamp(message.createdAt)}</span>
+                    {message.status ? <span>{message.status}</span> : null}
                   </div>
-                ) : null}
-              </div>
-            ))
+                  <div className="mt-1 text-sm leading-6 whitespace-pre-wrap">
+                    {message.content}
+                  </div>
+                  {message.errorMessage ? (
+                    <div className="mt-2 text-xs text-red-700">
+                      {message.errorMessage}
+                    </div>
+                  ) : null}
+                </div>
+              ))
           )}
         </div>
       </CardContent>

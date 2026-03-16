@@ -11,6 +11,7 @@ export function ControlsPanel(props: {
   onThreadLookupIdChange: (value: string) => void
   onCreateThread: () => void
   onLoadThreadById: () => void
+  disabled?: boolean
 }) {
   return (
     <Card className="border border-border/60 shadow-none" size="sm">
@@ -30,6 +31,7 @@ export function ControlsPanel(props: {
             <Input
               placeholder="Quarterly planning"
               value={props.newThreadTitle}
+              disabled={props.disabled}
               onChange={(event) => props.onNewThreadTitleChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -37,7 +39,7 @@ export function ControlsPanel(props: {
                 }
               }}
             />
-            <Button size="icon" onClick={props.onCreateThread}>
+            <Button size="icon" onClick={props.onCreateThread} disabled={props.disabled}>
               <Plus />
             </Button>
           </div>
@@ -56,6 +58,7 @@ export function ControlsPanel(props: {
             <Input
               placeholder={SEEDED_THREAD_ID}
               value={props.threadLookupId}
+              disabled={props.disabled}
               onChange={(event) => props.onThreadLookupIdChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -67,6 +70,7 @@ export function ControlsPanel(props: {
               variant="outline"
               size="icon"
               onClick={props.onLoadThreadById}
+              disabled={props.disabled}
             >
               <Search />
             </Button>
