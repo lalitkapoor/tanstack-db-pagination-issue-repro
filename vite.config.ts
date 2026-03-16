@@ -1,6 +1,5 @@
 import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
-import tailwindcss from "@tailwindcss/vite"
 import { resolve } from "node:path"
 import { readFileSync } from "node:fs"
 
@@ -29,11 +28,5 @@ export default defineConfig({
       "/api": "http://localhost:11001",
     },
   },
-  resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-      "~": resolve(__dirname, "src"),
-    },
-  },
-  plugins: [react(), tailwindcss(), wasmWorkerPlugin()],
+  plugins: [react(), wasmWorkerPlugin()],
 })
