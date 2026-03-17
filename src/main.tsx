@@ -28,6 +28,7 @@ import { SEEDED_THREAD_ID } from "@/shared/seed"
 import "./index.css"
 
 const DATABASE_NAME = "v2-message-query-minimal.sqlite"
+const INITIAL_HISTORY_PAGE_SIZE = 25
 const LAB_DEBUG_LABEL = "[MinimalMessageQueryLab]"
 
 type MessageRow = {
@@ -376,6 +377,7 @@ function useMessageQueryLabLogger(args: {
   collectionSize: number
   hasMoreMessages: boolean
   isFetchingOlderMessages: boolean
+  isLoadingSubset: boolean
 }) {
   const renderCountRef = React.useRef(0)
   const commitCountRef = React.useRef(0)
@@ -389,6 +391,7 @@ function useMessageQueryLabLogger(args: {
     collectionSize: args.collectionSize,
     hasMoreMessages: args.hasMoreMessages,
     isFetchingOlderMessages: args.isFetchingOlderMessages,
+    isLoadingSubset: args.isLoadingSubset,
     renderCount: renderCountRef.current,
   })
 
@@ -402,12 +405,103 @@ function useMessageQueryLabLogger(args: {
       collectionSize: args.collectionSize,
       hasMoreMessages: args.hasMoreMessages,
       isFetchingOlderMessages: args.isFetchingOlderMessages,
+      isLoadingSubset: args.isLoadingSubset,
       commitCount: commitCountRef.current,
     })
   })
 }
 
-function MessagesHistoryPanel(props: {
+function MessagesPanelFrame(props: {
+  controls?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  return (
+    <section style={{ display: "grid", gap: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Messages</h2>
+          <p style={{ margin: "4px 0 0", color: "#666", maxWidth: 760 }}>
+            Minimal single-file reproduction of the TanStack DB history query.
+            This page intentionally omits the thread list, composer, and app
+            shell so only the message history pipeline is active.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {props.controls}
+        </div>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid #d4d4d8",
+          borderRadius: 12,
+          padding: 12,
+          minHeight: 480,
+          maxHeight: "70vh",
+          overflow: "auto",
+          display: "grid",
+          gap: 8,
+          background: "#fafafa",
+        }}
+      >
+        {props.children}
+      </div>
+    </section>
+  )
+}
+
+function MessagesPanelControls(props: {
+  loadedLabel: string
+  buttonLabel: string
+  onLoadOlder?: () => void
+  isButtonDisabled: boolean
+}) {
+  return (
+    <>
+      <div
+        style={{
+          border: "1px solid #d4d4d8",
+          borderRadius: 999,
+          padding: "6px 12px",
+          background: "#f4f4f5",
+          fontSize: 13,
+          transition:
+            "border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+        }}
+      >
+        {props.loadedLabel}
+      </div>
+      <button
+        type="button"
+        onClick={props.onLoadOlder}
+        disabled={props.isButtonDisabled}
+        style={{
+          border: `1px solid ${props.isButtonDisabled ? "#e4e4e7" : "#d4d4d8"}`,
+          borderRadius: 8,
+          padding: "8px 12px",
+          background: props.isButtonDisabled ? "#f4f4f5" : "white",
+          color: props.isButtonDisabled ? "#71717a" : "#18181b",
+          opacity: props.isButtonDisabled ? 0.75 : 1,
+          cursor: props.isButtonDisabled ? "not-allowed" : "pointer",
+          transition:
+            "border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",
+        }}
+      >
+        {props.buttonLabel}
+      </button>
+    </>
+  )
+}
+
+const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
   collection: ReturnType<typeof createMessagesCollection>
   threadId: string
   anchorCreatedAt: number
@@ -415,12 +509,22 @@ function MessagesHistoryPanel(props: {
   const { collection, threadId, anchorCreatedAt } = props
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const previousScrollHeightRef = React.useRef(0)
+  const isLoadingSubset = React.useSyncExternalStore(
+    React.useCallback(
+      (onStoreChange) => collection.on("loadingSubset:change", onStoreChange),
+      [collection],
+    ),
+    React.useCallback(() => collection.isLoadingSubset, [collection]),
+    React.useCallback(() => collection.isLoadingSubset, [collection]),
+  )
 
   const {
     data: historyMessages = [],
     hasNextPage: hasMoreMessages,
     fetchNextPage,
     isFetchingNextPage: isFetchingOlderMessages,
+    isReady: isHistoryReady,
+    isLoading: isHistoryLoading,
   } = useLiveInfiniteQuery(
     (q) =>
       q
@@ -433,11 +537,15 @@ function MessagesHistoryPanel(props: {
         )
         .orderBy(({ message }) => message.createdAt, "desc")
         .orderBy(({ message }) => message.id, "desc"),
-    { pageSize: 25 },
+    { pageSize: INITIAL_HISTORY_PAGE_SIZE },
     [threadId, anchorCreatedAt],
   )
 
-  const { data: liveMessages = [] } = useLiveQuery(
+  const {
+    data: liveMessages = [],
+    isReady: isLiveReady,
+    isLoading: isLiveLoading,
+  } = useLiveQuery(
     (q) =>
       q
         .from({ message: collection })
@@ -464,6 +572,22 @@ function MessagesHistoryPanel(props: {
     [historyMessages, liveMessages],
   )
 
+  const hasResolvedInitialHistoryPage =
+    historyMessages.length >= INITIAL_HISTORY_PAGE_SIZE
+  const hasResolvedEmptyTranscript =
+    !isHistoryLoading &&
+    !isLiveLoading &&
+    !isLoadingSubset &&
+    collection.size === 0
+  const hasResolvedInitialTranscript =
+    hasResolvedInitialHistoryPage || hasResolvedEmptyTranscript
+  const isTranscriptReady =
+    isHistoryReady &&
+    isLiveReady &&
+    !isLoadingSubset &&
+    hasResolvedInitialTranscript
+  const [showTranscriptContent, setShowTranscriptContent] = React.useState(false)
+
   useMessageQueryLabLogger({
     threadId,
     anchorCreatedAt,
@@ -472,6 +596,7 @@ function MessagesHistoryPanel(props: {
     collectionSize: collection.size,
     hasMoreMessages,
     isFetchingOlderMessages,
+    isLoadingSubset,
   })
 
   React.useLayoutEffect(() => {
@@ -494,134 +619,109 @@ function MessagesHistoryPanel(props: {
     fetchNextPage?.()
   }, [fetchNextPage])
 
-  return (
-    <section style={{ display: "grid", gap: 12 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>Messages</h2>
-          <p style={{ margin: "4px 0 0", color: "#666", maxWidth: 760 }}>
-            Minimal `v2` reproduction of the persisted history query bug. The
-            page only mounts the anchored history query, the disjoint live
-            query, and the persisted query-backed collection.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div
-            style={{
-              border: "1px solid #d4d4d8",
-              borderRadius: 999,
-              padding: "6px 12px",
-              background: "#f4f4f5",
-              fontSize: 13,
-            }}
-          >
-            history {historyMessages.length}
-          </div>
-          <div
-            style={{
-              border: "1px solid #d4d4d8",
-              borderRadius: 999,
-              padding: "6px 12px",
-              background: "#f4f4f5",
-              fontSize: 13,
-            }}
-          >
-            live {liveMessages.length}
-          </div>
-          <div
-            style={{
-              border: "1px solid #d4d4d8",
-              borderRadius: 999,
-              padding: "6px 12px",
-              background: "#f4f4f5",
-              fontSize: 13,
-            }}
-          >
-            collection {collection.size}
-          </div>
-          <button
-            type="button"
-            onClick={loadOlderMessages}
-            disabled={!hasMoreMessages || isFetchingOlderMessages}
-            style={{
-              border: "1px solid #d4d4d8",
-              borderRadius: 8,
-              padding: "8px 12px",
-              background: "white",
-              cursor:
-                !hasMoreMessages || isFetchingOlderMessages ? "not-allowed" : "pointer",
-            }}
-          >
-            {isFetchingOlderMessages
-              ? "Loading older messages..."
-              : hasMoreMessages
-                ? "Load older messages"
-                : "No older messages"}
-          </button>
-        </div>
-      </div>
+  React.useEffect(() => {
+    if (!isTranscriptReady) {
+      setShowTranscriptContent(false)
+      return
+    }
 
+    const animationFrame = window.requestAnimationFrame(() => {
+      setShowTranscriptContent(true)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+    }
+  }, [isTranscriptReady])
+
+  const areTranscriptControlsReady = isTranscriptReady && showTranscriptContent
+
+  return (
+    <MessagesPanelFrame
+      controls={
+        <MessagesPanelControls
+          loadedLabel={
+            areTranscriptControlsReady ? `${sortedMessages.length} loaded` : "0 loaded"
+          }
+          buttonLabel={
+            areTranscriptControlsReady
+              ? isFetchingOlderMessages
+                ? "Loading older messages..."
+                : hasMoreMessages
+                  ? "Load older messages"
+                  : "No older messages"
+              : "Load older messages"
+          }
+          onLoadOlder={loadOlderMessages}
+          isButtonDisabled={
+            !areTranscriptControlsReady ||
+            !hasMoreMessages ||
+            isFetchingOlderMessages
+          }
+        />
+      }
+    >
       <div
         ref={scrollRef}
         style={{
-          border: "1px solid #d4d4d8",
-          borderRadius: 12,
-          padding: 12,
-          minHeight: 480,
-          maxHeight: "70vh",
-          overflow: "auto",
           display: "grid",
           gap: 8,
-          background: "#fafafa",
+          minHeight: "100%",
         }}
       >
-        {sortedMessages.length === 0 ? (
-          <div style={{ color: "#666" }}>No messages loaded for this thread.</div>
-        ) : (
-          sortedMessages.map((message) => (
-            <article
-              key={message.id}
-              style={{
-                border: "1px solid #e4e4e7",
-                borderRadius: 12,
-                padding: 12,
-                background: message.role === "user" ? "#eef2ff" : "#ffffff",
-                marginLeft: message.role === "user" ? "20%" : 0,
-                marginRight: message.role === "user" ? 0 : "20%",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  color: "#666",
-                  display: "flex",
-                  gap: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <span>{message.role}</span>
-                <span>{formatTimestamp(message.createdAt)}</span>
-              </div>
-              <div style={{ marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-                {message.content}
-              </div>
-            </article>
-          ))
-        )}
+        {isTranscriptReady ? (
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              opacity: showTranscriptContent ? 1 : 0,
+            }}
+          >
+            {sortedMessages.length === 0 ? (
+              <div style={{ color: "#666" }}>No messages loaded for this thread.</div>
+            ) : (
+              sortedMessages.map((message) => (
+                <article
+                  key={message.id}
+                  style={{
+                    border: "1px solid #e4e4e7",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: message.role === "user" ? "#eef2ff" : "#ffffff",
+                    marginLeft: message.role === "user" ? "20%" : 0,
+                    marginRight: message.role === "user" ? 0 : "20%",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      color: "#666",
+                      display: "flex",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span>{message.role}</span>
+                    <span>{formatTimestamp(message.createdAt)}</span>
+                  </div>
+                  <div
+                    style={{ marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.5 }}
+                  >
+                    {message.content}
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        ) : null}
       </div>
-    </section>
+    </MessagesPanelFrame>
   )
-}
+})
+
+MessagesHistoryPanel.displayName = "MessagesHistoryPanel"
 
 function getInitialThreadId() {
   const params = new URLSearchParams(window.location.search)
@@ -767,148 +867,120 @@ function App() {
     )
   }, [activeThreadId, anchorCreatedAt])
 
-  if (error) {
-    return (
-      <div style={{ padding: 20, color: "#b91c1c" }}>
-        <h2>Initialization failed</h2>
-        <pre>{error}</pre>
-      </div>
-    )
-  }
-
-  if (!collection) {
-    return <div style={{ padding: 20 }}>Initializing TanStack DB…</div>
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <main
         style={{
-          minHeight: "100vh",
-          padding: 24,
           fontFamily:
-            '"Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif',
-          color: "#111827",
-          background:
-            "linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(241,245,249,1) 100%)",
+            'InterVariable, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          padding: 24,
+          display: "grid",
+          gap: 16,
         }}
       >
-        <div
+        <header style={{ display: "grid", gap: 8 }}>
+          <h1 style={{ margin: 0, fontSize: 28 }}>
+            TanStack DB Message Query Minimal Repro
+          </h1>
+          <p style={{ margin: 0, color: "#666", maxWidth: 860 }}>
+            Single-file reproduction focused only on OPFS-persisted TanStack DB
+            message history queries. No app shell, no thread list, no composer,
+            and no store wrappers.
+          </p>
+        </header>
+
+        <section
           style={{
-            maxWidth: 1120,
-            margin: "0 auto",
             display: "grid",
-            gap: 16,
+            gap: 12,
+            border: "1px solid #e4e4e7",
+            borderRadius: 16,
+            padding: 16,
           }}
         >
-          <section
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#666" }}>Thread ID</span>
+            <input
+              value={threadIdInput}
+              onChange={(event) => setThreadIdInput(event.target.value)}
+              placeholder="Enter thread id"
+              style={{
+                border: "1px solid #d4d4d8",
+                borderRadius: 8,
+                padding: "10px 12px",
+                font: "inherit",
+              }}
+            />
+          </label>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={runQuery}
+              style={{
+                border: "1px solid #18181b",
+                background: "#18181b",
+                color: "white",
+                borderRadius: 8,
+                padding: "10px 14px",
+                cursor: "pointer",
+              }}
+            >
+              Run query
+            </button>
+            <button
+              type="button"
+              onClick={resetLocalState}
+              style={{
+                border: "1px solid #d4d4d8",
+                background: "white",
+                borderRadius: 8,
+                padding: "10px 14px",
+                cursor: "pointer",
+              }}
+            >
+              Reset local persistence
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 4, fontSize: 13, color: "#666" }}>
+            <div>Active thread: {activeThreadId}</div>
+            <div>Anchor createdAt: {anchorCreatedAt}</div>
+            <div>Fetch count: {fetchCount}</div>
+          </div>
+        </section>
+
+        {error ? (
+          <pre
             style={{
-              border: "1px solid #d4d4d8",
-              borderRadius: 16,
-              padding: 20,
-              background: "white",
-              display: "grid",
-              gap: 16,
+              margin: 0,
+              padding: 16,
+              borderRadius: 12,
+              border: "1px solid #fecaca",
+              background: "#fef2f2",
+              color: "#991b1b",
+              whiteSpace: "pre-wrap",
             }}
           >
-            <div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  border: "1px solid #d4d4d8",
-                  borderRadius: 999,
-                  padding: "6px 12px",
-                  background: "#f8fafc",
-                  fontSize: 13,
-                }}
-              >
-                v2 message-query minimal
-              </div>
-              <h1 style={{ margin: "12px 0 0", fontSize: 28 }}>
-                Historical + live query warm-path repro
-              </h1>
-              <p style={{ margin: "8px 0 0", color: "#4b5563", maxWidth: 820 }}>
-                This branch strips the app down to the persisted message
-                collection, the anchored historical query, and the disjoint live
-                query. The server data comes only from the local seeded SQLite
-                database.
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) auto auto",
-                gap: 12,
-                alignItems: "end",
-              }}
-            >
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 13, color: "#4b5563" }}>Thread id</span>
-                <input
-                  value={threadIdInput}
-                  onChange={(event) => setThreadIdInput(event.target.value)}
-                  style={{
-                    border: "1px solid #d4d4d8",
-                    borderRadius: 10,
-                    padding: "10px 12px",
-                    font: "inherit",
-                  }}
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={runQuery}
-                style={{
-                  border: "1px solid #d4d4d8",
-                  borderRadius: 10,
-                  padding: "10px 14px",
-                  background: "white",
-                  cursor: "pointer",
-                }}
-              >
-                Run query
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void resetLocalState()}
-                style={{
-                  border: "1px solid #d4d4d8",
-                  borderRadius: 10,
-                  padding: "10px 14px",
-                  background: "white",
-                  cursor: "pointer",
-                }}
-              >
-                Reset local SQLite
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-                color: "#4b5563",
-                fontSize: 13,
-              }}
-            >
-              <span>threadId: {activeThreadId}</span>
-              <span>anchor: {anchorCreatedAt}</span>
-              <span>fetches: {fetchCount}</span>
-            </div>
-          </section>
-
+            {error}
+          </pre>
+        ) : collection ? (
           <MessagesHistoryPanel
             collection={collection}
             threadId={activeThreadId}
             anchorCreatedAt={anchorCreatedAt}
           />
-        </div>
+        ) : (
+          <MessagesPanelFrame
+            controls={
+              <MessagesPanelControls
+                loadedLabel="0 loaded"
+                buttonLabel="Load older messages"
+                isButtonDisabled={true}
+              />
+            }
+          />
+        )}
       </main>
     </QueryClientProvider>
   )

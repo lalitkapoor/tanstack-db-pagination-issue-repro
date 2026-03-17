@@ -13,6 +13,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 }
 
+const HISTORY_RESPONSE_DELAY_MS = 100
+
 const database = createServerDatabase()
 const events = createEventHub(corsHeaders)
 
@@ -116,6 +118,12 @@ const server = Bun.serve({
             ? ` [${first.id} (t=${first.createdAt}) -> ${last.id} (t=${last.createdAt})]`
             : ""),
       )
+
+      if (HISTORY_RESPONSE_DELAY_MS > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, HISTORY_RESPONSE_DELAY_MS),
+        )
+      }
 
       return Response.json(result, { headers: corsHeaders })
     }
