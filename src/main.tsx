@@ -15,7 +15,14 @@ import {
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
 import { queryCollectionOptions } from "@tanstack/query-db-collection"
-import { and, eq, lte, useLiveInfiniteQuery } from "@tanstack/react-db"
+import {
+  and,
+  eq,
+  gt,
+  lte,
+  useLiveInfiniteQuery,
+  useLiveQuery,
+} from "@tanstack/react-db"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 const SEEDED_THREAD_ID = "00000000-0000-4000-8000-000000000001"
@@ -71,13 +78,20 @@ type ListThreadMessagesResponse = {
   nextCursor: string | null
 }
 
-type MessageQueryShape = {
-  threadId: string
-  maxCreatedAt?: number
-  beforeCreatedAt?: number
-  beforeId?: string
-  limit: number
-}
+type MessageQueryShape =
+  | {
+      kind: "history"
+      threadId: string
+      maxCreatedAt?: number
+      beforeCreatedAt?: number
+      beforeId?: string
+      limit: number
+    }
+  | {
+      kind: "live"
+      threadId: string
+      afterCreatedAt: number
+    }
 
 type BrowserSQLiteDebug = {
   sql: <TRow = unknown>(
@@ -200,6 +214,18 @@ function getQueryShape(opts: LoadSubsetOptions): MessageQueryShape {
     throw new Error("Message queries must include threadId")
   }
 
+  const afterCreatedAt = comparisons.find(
+    (c) => c.field.join(".") === "createdAt" && c.operator === "gt",
+  )?.value as number | undefined
+
+  if (afterCreatedAt != null) {
+    return {
+      kind: "live",
+      threadId,
+      afterCreatedAt,
+    }
+  }
+
   const limit = opts.limit ?? 50
   const maxCreatedAt = comparisons.find(
     (c) => c.field.join(".") === "createdAt" && c.operator === "lte",
@@ -227,6 +253,7 @@ function getQueryShape(opts: LoadSubsetOptions): MessageQueryShape {
   }
 
   return {
+    kind: "history",
     threadId,
     maxCreatedAt,
     beforeCreatedAt,
@@ -246,9 +273,20 @@ function getQueryKey(opts: LoadSubsetOptions) {
 
   const query = getQueryShape(opts)
 
+  if (query.kind === "live") {
+    return [
+      "minimal",
+      "messages",
+      "live",
+      query.threadId,
+      query.afterCreatedAt,
+    ] as const
+  }
+
   return [
     "minimal",
     "messages",
+    "history",
     query.threadId,
     query.maxCreatedAt ?? "unbounded",
     query.beforeCreatedAt ?? "latest",
@@ -323,16 +361,21 @@ function createMessagesCollection(args: {
     syncMode: "on-demand" as const,
     queryFn: (ctx) => {
       const loadSubsetOptions = ctx.meta?.loadSubsetOptions ?? {}
-      const comparisons = extractSimpleComparisons(loadSubsetOptions.where)
-      const threadId = comparisons.find((c) => c.field.join(".") === "threadId")
-        ?.value as string | undefined
+      const query = getQueryShape(loadSubsetOptions)
 
-      if (!threadId) {
+      if (import.meta.env.DEV) {
+        console.log("[MinimalMessageQueryLab][queryFn]", {
+          kind: query.kind,
+          query,
+          queryKey: getQueryKey(loadSubsetOptions),
+        })
+      }
+
+      if (query.kind === "live") {
         return []
       }
 
       args.onFetch()
-      const query = getQueryShape(loadSubsetOptions)
       return fetchHistoryPage({
         threadId: query.threadId,
         limit: query.limit,
@@ -361,6 +404,8 @@ function useMessageQueryLabLogger(args: {
   threadId: string
   anchorCreatedAt: number
   historyCount: number
+  liveCount: number
+  collectionSize: number
   hasMoreMessages: boolean
   isFetchingOlderMessages: boolean
 }) {
@@ -372,6 +417,8 @@ function useMessageQueryLabLogger(args: {
     threadId: args.threadId,
     anchorCreatedAt: args.anchorCreatedAt,
     historyCount: args.historyCount,
+    liveCount: args.liveCount,
+    collectionSize: args.collectionSize,
     hasMoreMessages: args.hasMoreMessages,
     isFetchingOlderMessages: args.isFetchingOlderMessages,
     renderCount: renderCountRef.current,
@@ -383,6 +430,8 @@ function useMessageQueryLabLogger(args: {
       threadId: args.threadId,
       anchorCreatedAt: args.anchorCreatedAt,
       historyCount: args.historyCount,
+      liveCount: args.liveCount,
+      collectionSize: args.collectionSize,
       hasMoreMessages: args.hasMoreMessages,
       isFetchingOlderMessages: args.isFetchingOlderMessages,
       commitCount: commitCountRef.current,
@@ -420,19 +469,39 @@ function MessagesHistoryPanel(props: {
     [threadId, anchorCreatedAt],
   )
 
+  const { data: liveMessages = [] } = useLiveQuery(
+    (q) =>
+      q
+        .from({ message: collection })
+        .where(({ message }) =>
+          and(eq(message.threadId, threadId), gt(message.createdAt, anchorCreatedAt)),
+        )
+        .orderBy(({ message }) => message.createdAt, "asc")
+        .orderBy(({ message }) => message.id, "asc"),
+    [threadId, anchorCreatedAt],
+  )
+
   const sortedMessages = React.useMemo(
     () =>
-      [...historyMessages].sort(
+      [...historyMessages, ...liveMessages]
+        .filter(
+          (message, index, allMessages) =>
+            allMessages.findIndex((candidate) => candidate.id === message.id) ===
+            index,
+        )
+        .sort(
         (left, right) =>
           left.createdAt - right.createdAt || left.id.localeCompare(right.id),
       ),
-    [historyMessages],
+    [historyMessages, liveMessages],
   )
 
   useMessageQueryLabLogger({
     threadId,
     anchorCreatedAt,
     historyCount: historyMessages.length,
+    liveCount: liveMessages.length,
+    collectionSize: collection.size,
     hasMoreMessages,
     isFetchingOlderMessages,
   })
@@ -630,6 +699,22 @@ function App() {
           queryClient,
           onFetch: () => setFetchCount((count) => count + 1),
         })
+
+        if (import.meta.env.DEV) {
+          messagesCollection.on("truncate", () => {
+            console.warn("[MinimalMessageQueryLab][collection] truncate", {
+              size: messagesCollection?.size ?? null,
+            })
+          })
+          messagesCollection.on("loadingSubset:change", (event) => {
+            console.log("[MinimalMessageQueryLab][collection] loadingSubset:change", {
+              isLoadingSubset: event.isLoadingSubset,
+              previousIsLoadingSubset: event.previousIsLoadingSubset,
+              transition: event.loadingSubsetTransition,
+              size: messagesCollection?.size ?? null,
+            })
+          })
+        }
 
         if (!isCancelled) {
           setDatabase(sqliteDatabase)
