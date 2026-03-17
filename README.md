@@ -41,7 +41,7 @@ When the bug happens, the underlying query state looks like:
 - then empty
 - then recovered history
 
-In earlier runs on the `v3` minimal branch, this showed up as traces like:
+On the `v3` minimal branch, this showed up as traces like:
 
 - `25 -> 0 -> 13 -> 25`
 - `25 -> 0 -> 1 -> 25`
@@ -57,13 +57,15 @@ This branch uses the seeded SQLite-backed server routes:
 
 The important finding is:
 
-- on `v2-message-query-minimal`, the bug does **not** appear by default
-- even when the live query is changed to `return []`
+- matching the frontend alone was not enough
+- on this SQLite-backed branch, we only reproduced the bug after widening the timing window with an artificial `100ms` history delay
 
 That means:
 
-- matching the frontend was not enough to reproduce the bug here
-- the remaining difference is timing in the data/runtime path
+- the key difference on `v2` was timing in the data/runtime path
+- that is why this branch now ships with both repro ingredients enabled:
+  - empty live result
+  - delayed history response
 
 ## Current conclusion
 
@@ -307,8 +309,6 @@ The key transition we observed was:
 where each pair is:
 
 - `historyCount / collectionSize`
-
-## Practical interpretation
 
 ## How to make this branch stable again
 
