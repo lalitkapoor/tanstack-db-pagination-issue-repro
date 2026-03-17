@@ -402,10 +402,9 @@ function createMessagesCollection(args: {
 
       if (query.kind === "live") {
         args.onFetch()
-        return fetchLiveTail({
-          threadId: query.threadId,
-          afterCreatedAt: query.afterCreatedAt,
-        })
+        // Uncomment to make the warm-path repro stable again.
+        // await new Promise((resolve) => setTimeout(resolve, 200))
+        return []
       }
 
       args.onFetch()
