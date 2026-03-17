@@ -317,10 +317,9 @@ function createMessagesCollection(args: {
       }
 
       if (query.kind === "live") {
-        const rows = await fetchLiveTail({
-          threadId: query.threadId,
-          afterCreatedAt: query.afterCreatedAt,
-        })
+        // Uncomment to make the warm-path repro stable again.
+        // await new Promise((resolve) => setTimeout(resolve, 200))
+        const rows: MessageRow[] = []
 
         console.info(`${LAB_DEBUG_LABEL}[fetch]`, {
           kind: query.kind,

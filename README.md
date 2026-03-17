@@ -67,48 +67,60 @@ That means:
 
 ## Current conclusion
 
-### 1. Normal SQLite-backed behavior is stable
+### 1. This branch now ships in a reproducible broken state
 
-With the normal code in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx):
-
-- `query.kind === "live"` calls `fetchLiveTail(...)`
-
-Observed result:
-
-- warm reload is stable
-- after the live query returns `0`, the state stays at:
-  - `historyCount: 25`
-  - `collectionSize: 26`
-
-### 2. `return []` is still stable on this branch
-
-We also changed the live branch in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx) to:
+The live branch in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx) now returns an empty result by default:
 
 ```ts
 if (query.kind === "live") {
+  // Uncomment to make the warm-path repro stable again.
+  // await new Promise((resolve) => setTimeout(resolve, 200))
   const rows: MessageRow[] = []
   return rows
 }
 ```
 
-Observed result:
+That means:
 
-- still stable
-- history remained:
-  - `historyCount: 25`
-  - `collectionSize: 26`
+- you do not need to edit the live query to make it broken
+- a fresh checkout already has the empty live result path enabled
 
-This matters because it is different from `v3-message-query-minimal`, where an empty live result was enough to bring the bug back.
+### 2. This branch still needs the artificial history delay
 
-### 3. We had to slow history down to make the bug appear
+Unlike `v3-message-query-minimal`, the empty live result alone was not enough on `v2`.
 
-To reproduce the bug on this SQLite-backed branch, we added an artificial delay to the **history** server path in [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts):
+We also needed the artificial history delay in [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts):
 
 ```ts
 const HISTORY_RESPONSE_DELAY_MS = 100
 ```
 
-That delay is applied only to the normal history path:
+That is why this branch reproduces only when both are true:
+
+- live returns `[]`
+- history is artificially delayed by `100ms`
+
+### 3. Uncommenting the client delay makes it stable again
+
+We tested the commented line in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx):
+
+```ts
+// await new Promise((resolve) => setTimeout(resolve, 200))
+```
+
+When that line is uncommented:
+
+- the empty live result is delayed on the client
+- history stabilizes first
+- the warm-path reset goes away again
+
+So on this branch, the easiest “make stable again” experiment is:
+
+- leave `return []`
+- leave `HISTORY_RESPONSE_DELAY_MS = 100`
+- uncomment the `200ms` client delay line
+
+The server delay is applied only to the normal history path:
 
 - `GET /api/threads/:threadId/messages`
 
@@ -168,8 +180,9 @@ Open:
 
 ## How to run the current working tree and see the issue
 
-If you are using the current working tree on this branch, the artificial history delay is already present in:
+If you are using the current working tree on this branch, both repro ingredients are already present:
 
+- the live query returns `[]` by default in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx)
 - [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts)
 
 That means you can see the issue without making any additional code edits.
@@ -242,28 +255,26 @@ That constant comes from:
    - `[MinimalMessageQueryLab][render]`
    - `[MinimalMessageQueryLab][commit]`
 
-Expected result without the artificial delay:
+Expected result without uncommenting the client delay:
 
-- history fetch returns `26`
-- live fetch returns `0`
-- the state stays stable at:
-  - `historyCount: 25`
-  - `collectionSize: 26`
+- the live query returns `0`
+- the delayed history path creates the bad timing window
+- the state resets before recovering
 
 ## How to reproduce the bug on this branch
 
-### Step 1: make the live query empty
-
-In [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx), change the live branch to return an empty result:
+### Step 1: confirm the branch is in broken mode
 
 ```ts
 if (query.kind === "live") {
+  // Uncomment to make the warm-path repro stable again.
+  // await new Promise((resolve) => setTimeout(resolve, 200))
   const rows: MessageRow[] = []
   return rows
 }
 ```
 
-### Step 2: add the artificial history delay
+### Step 2: confirm the artificial history delay is on
 
 In [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts), set:
 
@@ -296,6 +307,22 @@ The key transition we observed was:
 where each pair is:
 
 - `historyCount / collectionSize`
+
+## Practical interpretation
+
+## How to make this branch stable again
+
+The simplest stabilization experiment on this branch is:
+
+1. keep `return []`
+2. keep `HISTORY_RESPONSE_DELAY_MS = 100`
+3. uncomment this line in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx):
+
+```ts
+await new Promise((resolve) => setTimeout(resolve, 200))
+```
+
+In our testing, that was enough to make the delayed-history branch stable again.
 
 ## Practical interpretation
 
