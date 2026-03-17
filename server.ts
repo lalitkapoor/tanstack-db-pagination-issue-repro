@@ -123,6 +123,7 @@ async function proxyApplecartListThreadMessages(req: Request, threadId: string) 
   const url = new URL(req.url)
   const limit = Number(url.searchParams.get("limit") || "50")
   const cursor = url.searchParams.get("cursor")
+  const afterCreatedAt = url.searchParams.get("afterCreatedAt")
 
   const upstream = await fetch(getApplecartUrl(), {
     method: "POST",
@@ -143,11 +144,60 @@ async function proxyApplecartListThreadMessages(req: Request, threadId: string) 
   })
 
   const responseBody = await upstream.text()
+  const contentType =
+    upstream.headers.get("content-type") ?? "application/json"
+
+  if (
+    upstream.ok &&
+    afterCreatedAt != null &&
+    contentType.includes("application/json")
+  ) {
+    const boundary = Number(afterCreatedAt)
+
+    if (!Number.isFinite(boundary)) {
+      return Response.json(
+        { error: "Invalid afterCreatedAt" },
+        { status: 400, headers: corsHeaders },
+      )
+    }
+
+    const payload = JSON.parse(responseBody) as {
+      data?: Array<{ id?: string; createdAt?: number }>
+      nextCursor?: string | null
+    }
+
+    const filteredMessages = (payload.data ?? [])
+      .filter(
+        (
+          message,
+        ): message is { id?: string; createdAt: number } & typeof message =>
+          typeof message.createdAt === "number" &&
+          message.createdAt > boundary,
+      )
+      .sort(
+        (left, right) =>
+          left.createdAt - right.createdAt ||
+          (left.id ?? "").localeCompare(right.id ?? ""),
+      )
+
+    console.log(
+      `[server] GET /api/applecart/threads/${threadId}/messages afterCreatedAt=${afterCreatedAt} -> ${filteredMessages.length} msgs`,
+    )
+
+    return Response.json(
+      {
+        data: filteredMessages,
+        nextCursor: null,
+      },
+      { headers: corsHeaders },
+    )
+  }
+
   return new Response(responseBody, {
     status: upstream.status,
     headers: {
       ...corsHeaders,
-      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+      "Content-Type": contentType,
     },
   })
 }

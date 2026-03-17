@@ -334,6 +334,34 @@ async function fetchHistoryPage(args: {
   return payload.data.map(toMessageRow).reverse()
 }
 
+async function fetchLiveTail(args: {
+  threadId: string
+  afterCreatedAt: number
+}) {
+  const params = new URLSearchParams({
+    limit: "100",
+    afterCreatedAt: String(args.afterCreatedAt),
+  })
+
+  const response = await fetch(
+    `/api/applecart/threads/${args.threadId}/messages?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${getApiToken()}`,
+      },
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `GET /api/applecart/threads/${args.threadId}/messages failed: ${response.status}`,
+    )
+  }
+
+  const payload = (await response.json()) as ListThreadMessagesResponse
+  return payload.data.map(toMessageRow)
+}
+
 async function removeDatabaseFiles(prefix: string) {
   try {
     const root = await navigator.storage.getDirectory()
@@ -359,7 +387,7 @@ function createMessagesCollection(args: {
     id: "minimal-messages",
     queryKey: (opts: LoadSubsetOptions) => getQueryKey(opts),
     syncMode: "on-demand" as const,
-    queryFn: (ctx) => {
+    queryFn: async (ctx) => {
       const loadSubsetOptions = ctx.meta?.loadSubsetOptions ?? {}
       const query = getQueryShape(loadSubsetOptions)
 
@@ -372,7 +400,11 @@ function createMessagesCollection(args: {
       }
 
       if (query.kind === "live") {
-        return []
+        args.onFetch()
+        return fetchLiveTail({
+          threadId: query.threadId,
+          afterCreatedAt: query.afterCreatedAt,
+        })
       }
 
       args.onFetch()
