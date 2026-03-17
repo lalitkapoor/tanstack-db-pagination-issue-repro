@@ -57,15 +57,14 @@ This branch uses the seeded SQLite-backed server routes:
 
 The important finding is:
 
-- matching the frontend alone was not enough
-- on this SQLite-backed branch, we only reproduced the bug after widening the timing window with an artificial `100ms` history delay
+- this branch demonstrates a timing-sensitive race
+- the bug appears when the empty `live` result lands before `history` has stabilized
+- on this SQLite-backed branch, we make that race visible by widening the timing window with an artificial `100ms` history delay
 
-That means:
+That is why this branch now ships with both repro ingredients enabled:
 
-- the key difference on `v2` was timing in the data/runtime path
-- that is why this branch now ships with both repro ingredients enabled:
-  - empty live result
-  - delayed history response
+- empty live result
+- delayed history response
 
 ## Current conclusion
 
