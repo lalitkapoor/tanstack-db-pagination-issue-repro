@@ -9,18 +9,18 @@
     "db:query": "bun scripts/query-server-db.ts"
   },
   "dependencies": {
-    "@tanstack/db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-db-0.5.30.tgz",
-    "@tanstack/db-browser-wa-sqlite-persisted-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-db-browser-wa-sqlite-persisted-collection-0.1.0.tgz",
-    "@tanstack/query-db-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-query-db-collection-1.0.27.tgz",
-    "@tanstack/react-db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-react-db-0.1.74.tgz",
+    "@tanstack/db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-db-0.5.33.tgz",
+    "@tanstack/db-browser-wa-sqlite-persisted-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-db-browser-wa-sqlite-persisted-collection-0.1.0.tgz",
+    "@tanstack/query-db-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-query-db-collection-1.0.30.tgz",
+    "@tanstack/react-db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-react-db-0.1.77.tgz",
     "@tanstack/react-query": "^5.90.21",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "overrides": {
-    "@tanstack/db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-db-0.5.30.tgz",
-    "@tanstack/db-sqlite-persisted-collection-core": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-db-sqlite-persisted-collection-core-0.1.0.tgz",
-    "@tanstack/query-db-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.2-pr1230/tanstack-query-db-collection-1.0.27.tgz"
+    "@tanstack/db": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-db-0.5.33.tgz",
+    "@tanstack/db-sqlite-persisted-collection-core": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-db-sqlite-persisted-collection-core-0.1.0.tgz",
+    "@tanstack/query-db-collection": "https://github.com/lalitkapoor/tanstack-db/releases/download/v0.1.0-pr1380/tanstack-query-db-collection-1.0.30.tgz"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",

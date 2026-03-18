@@ -26,7 +26,10 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 const SEEDED_THREAD_ID = "00000000-0000-4000-8000-000000000001"
-const DATABASE_NAME = "message-query-minimal.sqlite"
+// PR 1380 adds persisted-row metadata to the SQLite adapter. Reusing the old
+// OPFS file crashes on the stale schema, so this branch intentionally opens a
+// fresh database file for the newer release assets.
+const DATABASE_NAME = "message-query-minimal-pr1380.sqlite"
 const INITIAL_HISTORY_PAGE_SIZE = 25
 
 type MessageRole = "assistant" | "error" | "system" | "tool" | "user"
