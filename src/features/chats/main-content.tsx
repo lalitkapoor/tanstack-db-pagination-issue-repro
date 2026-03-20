@@ -23,7 +23,7 @@ export function ChatsMainContent(props: {
         .from({ thread: threads })
         .orderBy(({ thread }) => thread.updatedAt, "desc")
         .orderBy(({ thread }) => thread.id, "desc"),
-    [threads],
+    [],
   )
 
   const selectedThread = useMemo(

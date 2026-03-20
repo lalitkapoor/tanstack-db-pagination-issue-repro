@@ -27,7 +27,7 @@ export function SidebarPanel(props: {
         .from({ item: favorites })
         .orderBy(({ item }) => item.updatedAt, "desc")
         .orderBy(({ item }) => item.id, "desc"),
-    [favorites],
+    [],
   )
 
   const recentsQuery = useLiveQuery(
@@ -36,7 +36,7 @@ export function SidebarPanel(props: {
         .from({ item: recents })
         .orderBy(({ item }) => item.updatedAt, "desc")
         .orderBy(({ item }) => item.id, "desc"),
-    [recents],
+    [],
   )
 
   const {
@@ -51,7 +51,7 @@ export function SidebarPanel(props: {
         .orderBy(({ thread }) => thread.updatedAt, "desc")
         .orderBy(({ thread }) => thread.id, "desc"),
     { pageSize: 2 },
-    [threads],
+    [],
   )
 
   const handleCreateThread = () => {
