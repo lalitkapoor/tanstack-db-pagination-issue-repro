@@ -3,24 +3,24 @@ import { useAppRuntime } from "~/app-runtime"
 
 export function ChatsReadBoundary(props: { children: ReactNode }) {
   const runtime = useAppRuntime()
-  const [isReady, setIsReady] = useState(() => runtime.isChatsReadReady())
+  const [isReady, setIsReady] = useState(() => runtime.isDataReady())
 
   useEffect(() => {
-    if (runtime.isChatsReadReady()) {
+    if (runtime.isDataReady()) {
       setIsReady(true)
       return
     }
 
     let cancelled = false
 
-    void runtime.ensureChatsRead().then(
+    void runtime.ensureDataReady().then(
       () => {
         if (!cancelled) {
           setIsReady(true)
         }
       },
-      (error) => {
-        console.error("ensureChatsRead failed:", error)
+      (error: unknown) => {
+        console.error("ensureDataReady failed:", error)
       },
     )
 

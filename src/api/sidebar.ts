@@ -116,3 +116,13 @@ export async function fetchSidebarRecents() {
 
   return normalizeSidebarRecents(response)
 }
+
+export class SidebarApi {
+  public listFavorites() {
+    return fetchSidebarFavorites()
+  }
+
+  public listRecents() {
+    return fetchSidebarRecents()
+  }
+}

@@ -1,8 +1,10 @@
 import { Home, Inbox, MessageCircle, Plus, Search, type LucideIcon } from "lucide-react"
-import { useQuery } from "@tanstack/react-query"
-import { fetchSidebarFavorites, fetchSidebarRecents, type SidebarHomePageItem } from "~/api/sidebar"
+import { useLiveQuery } from "@tanstack/react-db"
+import type { SidebarHomePageItem } from "~/api/sidebar"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import type { FavoritesCollection } from "~/db/data/favorites"
+import type { RecentsCollection } from "~/db/data/recents"
 import { formatTimestamp } from "~/lib/format-timestamp"
 import { cn } from "~/lib/utils"
 import { FileText } from "lucide-react"
@@ -11,6 +13,8 @@ export type SidebarTab = "home" | "chat"
 
 export function SidebarPanel(props: {
   activeTab: SidebarTab
+  favorites?: FavoritesCollection
+  recents?: RecentsCollection
   threads: Array<{
     id: string
     title: string
@@ -24,17 +28,27 @@ export function SidebarPanel(props: {
   onActiveTabChange: (tab: SidebarTab) => void
   onSelectThread: (threadId: string) => void
 }) {
-  const favoritesQuery = useQuery({
-    queryKey: ["sidebar", "favorites"],
-    queryFn: fetchSidebarFavorites,
-    retry: false,
-  })
+  const favoritesQuery = useLiveQuery(
+    (q) =>
+      props.favorites
+        ? q
+            .from({ item: props.favorites })
+            .orderBy(({ item }) => item.updatedAt, "desc")
+            .orderBy(({ item }) => item.id, "desc")
+        : undefined,
+    [props.favorites],
+  )
 
-  const recentsQuery = useQuery({
-    queryKey: ["sidebar", "recents"],
-    queryFn: fetchSidebarRecents,
-    retry: false,
-  })
+  const recentsQuery = useLiveQuery(
+    (q) =>
+      props.recents
+        ? q
+            .from({ item: props.recents })
+            .orderBy(({ item }) => item.updatedAt, "desc")
+            .orderBy(({ item }) => item.id, "desc")
+        : undefined,
+    [props.recents],
+  )
 
   return (
     <Card
@@ -92,16 +106,16 @@ export function SidebarPanel(props: {
               <SidebarSection
                 title="Favorites"
                 items={favoritesQuery.data ?? []}
-                isLoading={favoritesQuery.isLoading}
-                errorMessage={getQueryErrorMessage(favoritesQuery.error)}
+                isLoading={!props.favorites || favoritesQuery.isLoading}
+                errorMessage={favoritesQuery.isError ? "Favorites could not be loaded." : undefined}
                 emptyMessage="No favorite pages returned."
               />
 
               <SidebarSection
                 title="Recent"
                 items={recentsQuery.data ?? []}
-                isLoading={recentsQuery.isLoading}
-                errorMessage={getQueryErrorMessage(recentsQuery.error)}
+                isLoading={!props.recents || recentsQuery.isLoading}
+                errorMessage={recentsQuery.isError ? "Recent items could not be loaded." : undefined}
                 emptyMessage="No recent pages returned."
               />
             </>
@@ -182,10 +196,6 @@ function SidebarPill(props: {
       <span>{props.label}</span>
     </button>
   )
-}
-
-function getQueryErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : undefined
 }
 
 function SidebarSection(props: {

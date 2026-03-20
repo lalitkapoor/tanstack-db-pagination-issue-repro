@@ -11,8 +11,10 @@ export function ThreadsWorkspace(props: {
   header?: ReactNode
 }) {
   const runtime = useAppRuntime()
+  const favorites = runtime.data.collections.favorites
   const threads = runtime.data.collections.threads
   const messages = runtime.data.collections.messages
+  const recents = runtime.data.collections.recents
   const stores = runtime.data.stores
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<
@@ -105,6 +107,8 @@ export function ThreadsWorkspace(props: {
       <div className="min-h-0 overflow-hidden">
         <SidebarPanel
           activeTab={activeSidebarTab}
+          favorites={favorites}
+          recents={recents}
           threads={loadedThreads}
           selectedThreadId={selectedThreadId}
           hasMoreThreads={Boolean(hasMoreThreads)}
