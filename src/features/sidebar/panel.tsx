@@ -1,54 +1,69 @@
+import { useLiveInfiniteQuery, useLiveQuery } from "@tanstack/react-db"
 import { Home, Inbox, MessageCircle, Plus, Search, type LucideIcon } from "lucide-react"
-import { useLiveQuery } from "@tanstack/react-db"
+import { useAppRuntime } from "~/app-runtime"
 import type { SidebarHomePageItem } from "~/api/sidebar"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
-import type { FavoritesCollection } from "~/db/data/favorites"
-import type { RecentsCollection } from "~/db/data/recents"
 import { formatTimestamp } from "~/lib/format-timestamp"
 import { cn } from "~/lib/utils"
 import { FileText } from "lucide-react"
-
-export type SidebarTab = "home" | "chat"
+import type { SidebarTab } from "./types"
 
 export function SidebarPanel(props: {
   activeTab: SidebarTab
-  favorites?: FavoritesCollection
-  recents?: RecentsCollection
-  threads: Array<{
-    id: string
-    title: string
-    updatedAt: number
-  }>
   selectedThreadId: string | null
-  hasMoreThreads: boolean
-  isFetchingMoreThreads: boolean
-  onLoadOlderThreads: () => void
-  onCreateThread: () => void
   onActiveTabChange: (tab: SidebarTab) => void
   onSelectThread: (threadId: string) => void
 }) {
+  const runtime = useAppRuntime()
+  const favorites = runtime.data.collections.favorites
+  const recents = runtime.data.collections.recents
+  const threads = runtime.data.collections.threads
+  const stores = runtime.data.stores
+
   const favoritesQuery = useLiveQuery(
     (q) =>
-      props.favorites
-        ? q
-            .from({ item: props.favorites })
-            .orderBy(({ item }) => item.updatedAt, "desc")
-            .orderBy(({ item }) => item.id, "desc")
-        : undefined,
-    [props.favorites],
+      q
+        .from({ item: favorites })
+        .orderBy(({ item }) => item.updatedAt, "desc")
+        .orderBy(({ item }) => item.id, "desc"),
+    [favorites],
   )
 
   const recentsQuery = useLiveQuery(
     (q) =>
-      props.recents
-        ? q
-            .from({ item: props.recents })
-            .orderBy(({ item }) => item.updatedAt, "desc")
-            .orderBy(({ item }) => item.id, "desc")
-        : undefined,
-    [props.recents],
+      q
+        .from({ item: recents })
+        .orderBy(({ item }) => item.updatedAt, "desc")
+        .orderBy(({ item }) => item.id, "desc"),
+    [recents],
   )
+
+  const {
+    data: loadedThreads = [],
+    hasNextPage: hasMoreThreads,
+    fetchNextPage: fetchMoreThreads,
+    isFetchingNextPage: isFetchingMoreThreads,
+  } = useLiveInfiniteQuery(
+    (q) =>
+      q
+        .from({ thread: threads })
+        .orderBy(({ thread }) => thread.updatedAt, "desc")
+        .orderBy(({ thread }) => thread.id, "desc"),
+    { pageSize: 2 },
+    [threads],
+  )
+
+  const handleCreateThread = () => {
+    const threadId = stores.threads.add("New chat")
+    props.onActiveTabChange("chat")
+    props.onSelectThread(threadId)
+  }
+
+  const handleSelectThread = (threadId: string) => {
+    props.onActiveTabChange("chat")
+    props.onSelectThread(threadId)
+  }
 
   return (
     <Card
@@ -90,8 +105,8 @@ export function SidebarPanel(props: {
           </CardTitle>
           <CardDescription>
             {props.activeTab === "home"
-              ? "Favorites and recent pages inside the repro shell."
-              : "All loaded threads from the local chat repro."}
+              ? "Favorites and recent pages inside the app shell."
+              : "All loaded threads from the chat feature."}
           </CardDescription>
         </div>
       </CardHeader>
@@ -106,7 +121,7 @@ export function SidebarPanel(props: {
               <SidebarSection
                 title="Favorites"
                 items={favoritesQuery.data ?? []}
-                isLoading={!props.favorites || favoritesQuery.isLoading}
+                isLoading={favoritesQuery.isLoading}
                 errorMessage={favoritesQuery.isError ? "Favorites could not be loaded." : undefined}
                 emptyMessage="No favorite pages returned."
               />
@@ -114,33 +129,33 @@ export function SidebarPanel(props: {
               <SidebarSection
                 title="Recent"
                 items={recentsQuery.data ?? []}
-                isLoading={!props.recents || recentsQuery.isLoading}
+                isLoading={recentsQuery.isLoading}
                 errorMessage={recentsQuery.isError ? "Recent items could not be loaded." : undefined}
                 emptyMessage="No recent pages returned."
               />
             </>
           ) : (
             <ChatSection
-              threads={props.threads}
+              threads={loadedThreads}
               selectedThreadId={props.selectedThreadId}
-              onSelectThread={props.onSelectThread}
+              onSelectThread={handleSelectThread}
             />
           )}
         </div>
 
         <div className="grid gap-2 border-t border-sidebar-border/80 pt-3">
-          <Button className="w-full justify-start rounded-full" onClick={props.onCreateThread}>
+          <Button className="w-full justify-start rounded-full" onClick={handleCreateThread}>
             <Plus className="size-4" />
             New chat
           </Button>
           <Button
             variant="outline"
             className="w-full justify-start rounded-full"
-            onClick={props.onLoadOlderThreads}
-            disabled={!props.hasMoreThreads || props.isFetchingMoreThreads}
+            onClick={() => fetchMoreThreads?.()}
+            disabled={!hasMoreThreads || isFetchingMoreThreads}
           >
             <MessageCircle className="size-4" />
-            {props.hasMoreThreads ? "Load older chats" : "No older chats"}
+            {hasMoreThreads ? "Load older chats" : "No older chats"}
           </Button>
         </div>
       </CardContent>

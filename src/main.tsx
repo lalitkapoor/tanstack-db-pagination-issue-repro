@@ -9,11 +9,11 @@ import { Button } from "./components/ui/button"
 import {
   Card,
   CardAction,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "./components/ui/card"
-import { SidebarPanel } from "./features/chats/threads/sidebar-panel"
 import { App } from "./App"
 import "./index.css"
 
@@ -31,17 +31,7 @@ function AppBootShell() {
     <AppFrame>
       <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[24rem_minmax(0,1fr)]">
         <div className="min-h-0 overflow-hidden">
-          <SidebarPanel
-            activeTab="home"
-            threads={[]}
-            selectedThreadId={null}
-            hasMoreThreads={false}
-            isFetchingMoreThreads={false}
-            onCreateThread={() => {}}
-            onActiveTabChange={() => {}}
-            onLoadOlderThreads={() => {}}
-            onSelectThread={() => {}}
-          />
+          <BootSidebarPlaceholder />
         </div>
 
         <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
@@ -50,6 +40,37 @@ function AppBootShell() {
         </div>
       </div>
     </AppFrame>
+  )
+}
+
+function BootSidebarPlaceholder() {
+  return (
+    <Card
+      className="flex h-full min-h-0 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-none"
+      size="sm"
+    >
+      <CardHeader className="gap-4 border-b border-sidebar-border/80 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="size-2 rounded-full bg-emerald-500" />
+        </div>
+        <div className="space-y-1">
+          <CardTitle className="text-base">Home</CardTitle>
+          <CardDescription>
+            Favorites and recents are loading with the app shell.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-9 rounded-md bg-foreground/[0.04]"
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

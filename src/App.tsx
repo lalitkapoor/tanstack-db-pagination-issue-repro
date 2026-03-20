@@ -12,7 +12,9 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { resetDatabase, type AppRuntime } from "~/db"
-import { ThreadsWorkspace } from "~/features/chats/threads/workspace"
+import { ChatsMainContent, HomeMainContent } from "~/features/chats/main-content"
+import { SidebarPanel } from "~/features/sidebar/panel"
+import type { SidebarTab } from "~/features/sidebar/types"
 
 function FetchCountValue(props: { runtime: AppRuntime }) {
   const [displayFetchCount, setDisplayFetchCount] = useState(
@@ -35,6 +37,8 @@ function FetchCountValue(props: { runtime: AppRuntime }) {
 
 export function App() {
   const runtime = useAppRuntime()
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("home")
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
 
   useEffect(() => {
     ;(window as Window & { __appRuntime?: AppRuntime }).__appRuntime = runtime
@@ -45,14 +49,37 @@ export function App() {
 
   return (
     <AppFrame>
-      <ThreadsWorkspace
-        header={
-          <AppHeader
-            fetchCount={<FetchCountValue runtime={runtime} />}
-            onReset={() => resetDatabase()}
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[24rem_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-hidden">
+          <SidebarPanel
+            activeTab={activeSidebarTab}
+            selectedThreadId={selectedThreadId}
+            onActiveTabChange={setActiveSidebarTab}
+            onSelectThread={setSelectedThreadId}
           />
-        }
-      />
+        </div>
+        {activeSidebarTab === "chat" ? (
+          <ChatsMainContent
+            header={
+              <AppHeader
+                fetchCount={<FetchCountValue runtime={runtime} />}
+                onReset={() => resetDatabase()}
+              />
+            }
+            selectedThreadId={selectedThreadId}
+            onSelectThread={setSelectedThreadId}
+          />
+        ) : (
+          <HomeMainContent
+            header={
+              <AppHeader
+                fetchCount={<FetchCountValue runtime={runtime} />}
+                onReset={() => resetDatabase()}
+              />
+            }
+          />
+        )}
+      </div>
     </AppFrame>
   )
 }
