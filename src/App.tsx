@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { RefreshCcw } from "lucide-react"
 import { useAppRuntime } from "~/app-runtime"
 import { AppFrame } from "~/app-frame"
@@ -38,7 +38,22 @@ function FetchCountValue(props: { runtime: AppRuntime }) {
 export function App() {
   const runtime = useAppRuntime()
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("home")
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
+  const [chatSelection, setChatSelection] = useState<{
+    threadId: string | null
+    messageAnchorCreatedAt: number | null
+  }>({
+    threadId: null,
+    messageAnchorCreatedAt: null,
+  })
+
+  const handleSelectThread = useCallback((threadId: string) => {
+    setChatSelection({
+      threadId,
+      messageAnchorCreatedAt: Date.now(),
+    })
+  }, [])
+
+  const selectedThreadId = chatSelection.threadId
 
   useEffect(() => {
     ;(window as Window & { __appRuntime?: AppRuntime }).__appRuntime = runtime
@@ -55,7 +70,7 @@ export function App() {
             activeTab={activeSidebarTab}
             selectedThreadId={selectedThreadId}
             onActiveTabChange={setActiveSidebarTab}
-            onSelectThread={setSelectedThreadId}
+            onSelectThread={handleSelectThread}
           />
         </div>
         {activeSidebarTab === "chat" ? (
@@ -67,7 +82,8 @@ export function App() {
               />
             }
             selectedThreadId={selectedThreadId}
-            onSelectThread={setSelectedThreadId}
+            messageAnchorCreatedAt={chatSelection.messageAnchorCreatedAt}
+            onSelectThread={handleSelectThread}
           />
         ) : (
           <HomeMainContent

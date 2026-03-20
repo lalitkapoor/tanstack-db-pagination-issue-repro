@@ -8,13 +8,13 @@ import { SelectedThreadShell } from "./threads/selected-thread-shell"
 export function ChatsMainContent(props: {
   header?: ReactNode
   selectedThreadId: string | null
+  messageAnchorCreatedAt: number | null
   onSelectThread: (threadId: string) => void
 }) {
   const runtime = useAppRuntime()
   const threads = runtime.data.collections.threads
   const messages = runtime.data.collections.messages
   const stores = runtime.data.stores
-  const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<number | null>(null)
   const [messageInput, setMessageInput] = useState("")
 
   const { data: loadedThreads = [] } = useLiveQuery(
@@ -45,9 +45,9 @@ export function ChatsMainContent(props: {
       }
     ).__appState = {
       selectedThreadId: props.selectedThreadId,
-      messageAnchorCreatedAt,
+      messageAnchorCreatedAt: props.messageAnchorCreatedAt,
     }
-  }, [messageAnchorCreatedAt, props.selectedThreadId])
+  }, [props.messageAnchorCreatedAt, props.selectedThreadId])
 
   useEffect(() => {
     if (loadedThreads.length === 0 || props.selectedThreadId) {
@@ -59,15 +59,6 @@ export function ChatsMainContent(props: {
       props.onSelectThread(nextThreadId)
     }
   }, [loadedThreads, props.onSelectThread, props.selectedThreadId])
-
-  useEffect(() => {
-    if (!props.selectedThreadId) {
-      setMessageAnchorCreatedAt(null)
-      return
-    }
-
-    setMessageAnchorCreatedAt(Date.now())
-  }, [props.selectedThreadId])
 
   const handleSend = () => {
     const content = messageInput.trim()
@@ -85,7 +76,7 @@ export function ChatsMainContent(props: {
       <SelectedThreadShell
         selectedThreadId={props.selectedThreadId}
         selectedThread={selectedThread}
-        messageAnchorCreatedAt={messageAnchorCreatedAt}
+        messageAnchorCreatedAt={props.messageAnchorCreatedAt}
         messages={messages}
       />
       <div>
