@@ -79,6 +79,18 @@ export function TranscriptPanel(props: {
     [historyMessages, liveMessages],
   )
 
+  const duplicateMessageIds = useMemo(() => {
+    const counts = new Map<string, number>()
+
+    for (const message of sortedMessages) {
+      counts.set(message.id, (counts.get(message.id) ?? 0) + 1)
+    }
+
+    return [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([messageId]) => messageId)
+  }, [sortedMessages])
+
   const loadOlderMessages = useCallback(() => {
     if (scrollRef.current) {
       prevScrollHeightRef.current = scrollRef.current.scrollHeight
@@ -111,6 +123,14 @@ export function TranscriptPanel(props: {
       element.scrollTop = element.scrollHeight
     }
   }, [sortedMessages.length, selectedThreadId])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || duplicateMessageIds.length === 0) {
+      return
+    }
+
+    console.warn("[TranscriptPanel] duplicate message ids detected", duplicateMessageIds)
+  }, [duplicateMessageIds])
 
   return (
     <Card className="min-h-0 border border-border/60 shadow-none">

@@ -111,6 +111,32 @@ async function proxyApplecartListThreads(req: Request) {
   })
 }
 
+async function proxyApplecartSidebarPayload(req: Request, type: "listFavorites" | "listRecents") {
+  const bearerToken = parseBearerToken(req)
+  if (!bearerToken) {
+    return Response.json({ error: "Missing Authorization header" }, { status: 401, headers: corsHeaders })
+  }
+
+  const upstream = await fetch(getApplecartUrl(), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({ type }),
+  })
+
+  const responseBody = await upstream.text()
+  return new Response(responseBody, {
+    status: upstream.status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+    },
+  })
+}
+
 async function proxyApplecartListThreadMessages(req: Request, threadId: string) {
   const bearerToken = parseBearerToken(req)
   if (!bearerToken) {
@@ -376,6 +402,14 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/applecart/threads" && req.method === "GET") {
       return proxyApplecartListThreads(req)
+    }
+
+    if (url.pathname === "/api/applecart/sidebar/favorites" && req.method === "GET") {
+      return proxyApplecartSidebarPayload(req, "listFavorites")
+    }
+
+    if (url.pathname === "/api/applecart/sidebar/recents" && req.method === "GET") {
+      return proxyApplecartSidebarPayload(req, "listRecents")
     }
 
     if (url.pathname === "/api/threads" && req.method === "POST") {

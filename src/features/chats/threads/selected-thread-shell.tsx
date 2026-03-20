@@ -20,7 +20,7 @@ export function SelectedThreadShell(props: {
   selectedThreadId: string | null
   selectedThread?: ThreadRecord
   messageAnchorCreatedAt: number | null
-  messages: MessagesCollection
+  messages?: MessagesCollection
 }) {
   return (
     <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
@@ -56,7 +56,9 @@ export function SelectedThreadShell(props: {
         </CardHeader>
       </Card>
 
-      {props.selectedThreadId && props.messageAnchorCreatedAt != null ? (
+      {props.selectedThreadId &&
+      props.messageAnchorCreatedAt != null &&
+      props.messages ? (
         <MessagesPanel
           key={props.selectedThreadId}
           messages={props.messages}

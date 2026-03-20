@@ -1,23 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { useLiveInfiniteQuery } from "@tanstack/react-db"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useLiveInfiniteQuery, useLiveQuery } from "@tanstack/react-db"
 import { useAppRuntime } from "~/app-runtime"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { cn } from "~/lib/utils"
 import { ComposerPanel } from "../messages/composer-panel"
-import { ControlsPanel } from "./controls-panel"
-import { ListPanel } from "./list-panel"
+import { SidebarPanel, type SidebarTab } from "./sidebar-panel"
 import { SelectedThreadShell } from "./selected-thread-shell"
 
-export function ThreadsWorkspace() {
+export function ThreadsWorkspace(props: {
+  header?: ReactNode
+}) {
   const runtime = useAppRuntime()
   const threads = runtime.data.collections.threads
   const messages = runtime.data.collections.messages
   const stores = runtime.data.stores
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
-  const [threadLookupId, setThreadLookupId] = useState("")
   const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState<
     number | null
   >(null)
-  const [newThreadTitle, setNewThreadTitle] = useState("")
   const [messageInput, setMessageInput] = useState("")
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("home")
 
   useEffect(() => {
     ;(
@@ -48,49 +50,43 @@ export function ThreadsWorkspace() {
     [],
   )
 
+  const { data: loadedThreads = [] } = useLiveQuery(
+    (q) =>
+      q
+        .from({ thread: threads })
+        .orderBy(({ thread }) => thread.updatedAt, "desc")
+        .orderBy(({ thread }) => thread.id, "desc"),
+    [],
+  )
+
   const selectedThread = useMemo(
     () =>
       selectedThreadId
-        ? rawThreads.find((thread) => thread.id === selectedThreadId) ??
+        ? loadedThreads.find((thread) => thread.id === selectedThreadId) ??
           threads.get(selectedThreadId)
         : undefined,
-    [rawThreads, selectedThreadId, threads],
+    [loadedThreads, selectedThreadId, threads],
   )
 
   const selectThread = useCallback((threadId: string) => {
     setSelectedThreadId(threadId)
-    setThreadLookupId(threadId)
     setMessageAnchorCreatedAt(Date.now())
   }, [])
 
   useEffect(() => {
-    if (rawThreads.length === 0 || selectedThread) {
+    if (loadedThreads.length === 0 || selectedThread) {
       return
     }
 
-    const nextThreadId = rawThreads[0]?.id
+    const nextThreadId = loadedThreads[0]?.id
     if (nextThreadId) {
       selectThread(nextThreadId)
     }
-  }, [rawThreads, selectedThread, selectThread])
+  }, [loadedThreads, selectedThread, selectThread])
 
   const handleCreateThread = () => {
-    const title = newThreadTitle.trim()
-    if (!title) {
-      return
-    }
-
-    const id = stores.threads.add(title)
-    setNewThreadTitle("")
-    selectThread(id)
-  }
-
-  const handleLoadThreadById = () => {
-    const id = threadLookupId.trim()
-    if (!id) {
-      return
-    }
-
+    const id = stores.threads.add("New chat")
+    setActiveSidebarTab("chat")
     selectThread(id)
   }
 
@@ -105,42 +101,68 @@ export function ThreadsWorkspace() {
   }
 
   return (
-    <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
-      <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
-        <ControlsPanel
-          newThreadTitle={newThreadTitle}
-          threadLookupId={threadLookupId}
-          onNewThreadTitleChange={setNewThreadTitle}
-          onThreadLookupIdChange={setThreadLookupId}
-          onCreateThread={handleCreateThread}
-          onLoadThreadById={handleLoadThreadById}
-        />
-        <ListPanel
-          threads={rawThreads}
+    <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[24rem_minmax(0,1fr)]">
+      <div className="min-h-0 overflow-hidden">
+        <SidebarPanel
+          activeTab={activeSidebarTab}
+          threads={loadedThreads}
           selectedThreadId={selectedThreadId}
           hasMoreThreads={Boolean(hasMoreThreads)}
           isFetchingMoreThreads={Boolean(isFetchingMoreThreads)}
-          onSelectThread={selectThread}
+          onCreateThread={handleCreateThread}
+          onActiveTabChange={setActiveSidebarTab}
           onLoadOlderThreads={() => fetchMoreThreads?.()}
+          onSelectThread={selectThread}
         />
       </div>
 
-      <div className="grid min-h-0 gap-3 lg:grid-rows-[minmax(0,1fr)_auto]">
-        <SelectedThreadShell
-          selectedThreadId={selectedThreadId}
-          selectedThread={selectedThread}
-          messageAnchorCreatedAt={messageAnchorCreatedAt}
-          messages={messages}
-        />
-        <div>
-          <ComposerPanel
-            selectedThreadId={selectedThreadId}
-            messageInput={messageInput}
-            onMessageInputChange={setMessageInput}
-            onSend={handleSend}
-          />
-        </div>
+      <div
+        className={cn(
+          "grid min-h-0 gap-3",
+          activeSidebarTab === "chat"
+            ? "lg:grid-rows-[auto_minmax(0,1fr)_auto]"
+            : "lg:grid-rows-[auto_minmax(0,1fr)]",
+        )}
+      >
+        {props.header}
+        {activeSidebarTab === "chat" ? (
+          <>
+            <SelectedThreadShell
+              selectedThreadId={selectedThreadId}
+              selectedThread={selectedThread}
+              messageAnchorCreatedAt={messageAnchorCreatedAt}
+              messages={messages}
+            />
+            <div>
+              <ComposerPanel
+                selectedThreadId={selectedThreadId}
+                messageInput={messageInput}
+                onMessageInputChange={setMessageInput}
+                onSend={handleSend}
+              />
+            </div>
+          </>
+        ) : (
+          <HomeCanvasPlaceholder />
+        )}
       </div>
     </div>
+  )
+}
+
+function HomeCanvasPlaceholder() {
+  return (
+    <Card className="min-h-0 border border-border/60 shadow-none">
+      <CardHeader>
+        <CardTitle>Home</CardTitle>
+        <CardDescription>
+          Favorites and recents live in the sidebar. Switch to the `Chat` tab to
+          inspect a thread transcript and send messages.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">
+        The right-hand panel is intentionally idle while the Home sidebar is active.
+      </CardContent>
+    </Card>
   )
 }

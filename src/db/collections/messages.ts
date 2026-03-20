@@ -46,6 +46,44 @@ type MessageQueryShape =
       afterCreatedAt: number
     }
 
+function assertNeverMessageRole(message: never): never {
+  throw new Error(`Unhandled message role: ${JSON.stringify(message)}`)
+}
+
+export function toStoredMessageRow(message: ThreadMessage): Message {
+  const baseRow = {
+    id: message.id,
+    threadId: message.threadId,
+    createdAt: message.createdAt,
+    status: message.status,
+    traceId: message.traceId,
+    inferenceId: message.inferenceId,
+  }
+
+  switch (message.role) {
+    case "agent":
+    case "user":
+    case "assistant":
+    case "system":
+    case "tool":
+      return {
+        ...baseRow,
+        role: message.role,
+        content: message.text,
+        queued: message.queued,
+      }
+    case "error":
+      return {
+        ...baseRow,
+        role: message.role,
+        content: message.text,
+        errorMessage: message.error.message,
+      }
+    default:
+      return assertNeverMessageRole(message)
+  }
+}
+
 export class MessagesStore {
   private collectionInstance: ReturnType<
     MessagesStore["createCollection"]
@@ -57,43 +95,6 @@ export class MessagesStore {
     private readonly databaseContext: DatabaseContext,
     private readonly api: Api,
   ) {}
-
-  private assertNeverMessageRole(message: never): never {
-    throw new Error(`Unhandled message role: ${JSON.stringify(message)}`)
-  }
-
-  private toMessageRow(message: ThreadMessage): Message {
-    const baseRow = {
-      id: message.id,
-      threadId: message.threadId,
-      createdAt: message.createdAt,
-      status: message.status,
-      traceId: message.traceId,
-      inferenceId: message.inferenceId,
-    }
-
-    switch (message.role) {
-      case "user":
-      case "assistant":
-      case "system":
-      case "tool":
-        return {
-          ...baseRow,
-          role: message.role,
-          content: message.text,
-          queued: message.queued,
-        }
-      case "error":
-        return {
-          ...baseRow,
-          role: message.role,
-          content: message.text,
-          errorMessage: message.error.message,
-        }
-      default:
-        return this.assertNeverMessageRole(message)
-    }
-  }
 
   private extractCursorBoundary(expr: LoadSubsetOptions["where"] | undefined): {
     createdAt?: number
@@ -234,7 +235,7 @@ export class MessagesStore {
   }) {
     const response = await this.api.messages.list(args)
 
-    return response.data.map((message) => this.toMessageRow(message)).reverse()
+    return response.data.map((message) => toStoredMessageRow(message)).reverse()
   }
 
   private replaceOptimisticMessage(args: {
@@ -276,7 +277,7 @@ export class MessagesStore {
           const pendingText = pendingTextByMessageId.get(event.message.id) ?? ""
           const pendingStatus = pendingStatusByMessageId.get(event.message.id)
           const row = {
-            ...this.toMessageRow(event.message),
+            ...toStoredMessageRow(event.message),
             content: `${event.message.text}${pendingText}`,
             status: pendingStatus ?? event.message.status,
           }
