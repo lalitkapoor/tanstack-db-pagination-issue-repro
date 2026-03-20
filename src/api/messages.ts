@@ -45,7 +45,7 @@ type RawChunkedThreadMessage = {
   role: "agent" | "user"
   index?: number
   createdAt: number
-  content: unknown[]
+  content: ApplecartMessageChunk[]
   status?: MessageStatus
   traceId?: string
   inferenceId?: string
@@ -95,61 +95,282 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object"
 }
 
-function isMessageStatus(value: unknown): value is MessageStatus {
-  return (
-    value === "complete" ||
-    value === "failed" ||
-    value === "in_progress"
-  )
+type ApplecartTextChunk = {
+  type: "text"
+  content: string
 }
 
-function isNormalizedThreadMessage(message: unknown): message is ThreadMessage {
+type ApplecartThinkingChunk = {
+  type: "thinking"
+  content: ApplecartTextChunk
+}
+
+type ApplecartToolRequestChunk = {
+  type: "toolRequest"
+  id: string
+  tool: string
+  toolArguments: unknown
+}
+
+type ApplecartToolResponseResult =
+  | {
+      type: "success"
+      result: unknown
+    }
+  | {
+      type: "failure"
+      reason: string
+    }
+
+type ApplecartToolResponseChunk = {
+  type: "toolResponse"
+  requestId: string
+  result: ApplecartToolResponseResult
+}
+
+export type ApplecartMessageChunk =
+  | ApplecartTextChunk
+  | ApplecartThinkingChunk
+  | ApplecartToolRequestChunk
+  | ApplecartToolResponseChunk
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value : null
+}
+
+function asNumber(value: unknown) {
+  return typeof value === "number" ? value : null
+}
+
+function asArray(value: unknown) {
+  return Array.isArray(value) ? value : null
+}
+
+function asOptionalString(value: unknown) {
+  return value === undefined ? undefined : asString(value) ?? undefined
+}
+
+function parseMessageStatus(value: unknown): MessageStatus | undefined {
+  return value === "complete" || value === "failed" || value === "in_progress"
+    ? value
+    : undefined
+}
+
+function parseMessageErrorDetails(value: unknown): MessageErrorDetails | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const message = asString(value.message)
+  if (message == null) {
+    return null
+  }
+
+  return {
+    code: asOptionalString(value.code),
+    message,
+    details: value.details,
+  }
+}
+
+function parseTextChunk(value: unknown): ApplecartTextChunk | null {
+  if (!isRecord(value) || value.type !== "text") {
+    return null
+  }
+
+  const content = asString(value.content)
+  if (content == null) {
+    return null
+  }
+
+  return {
+    type: "text",
+    content,
+  }
+}
+
+function parseToolResponseResult(value: unknown): ApplecartToolResponseResult | null {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return null
+  }
+
+  switch (value.type) {
+    case "success":
+      return {
+        type: "success",
+        result: value.result,
+      }
+    case "failure": {
+      const reason = asString(value.reason)
+      if (reason == null) {
+        return null
+      }
+
+      return {
+        type: "failure",
+        reason,
+      }
+    }
+    default:
+      return null
+  }
+}
+
+function parseMessageChunk(value: unknown): ApplecartMessageChunk | null {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return null
+  }
+
+  switch (value.type) {
+    case "text":
+      return parseTextChunk(value)
+    case "thinking": {
+      const content = parseTextChunk(value.content)
+      if (content == null) {
+        return null
+      }
+
+      return {
+        type: "thinking",
+        content,
+      }
+    }
+    case "toolRequest": {
+      const id = asString(value.id)
+      const tool = asString(value.tool)
+      if (id == null || tool == null) {
+        return null
+      }
+
+      return {
+        type: "toolRequest",
+        id,
+        tool,
+        toolArguments: value.toolArguments,
+      }
+    }
+    case "toolResponse": {
+      const requestId = asString(value.requestId)
+      const result = parseToolResponseResult(value.result)
+      if (requestId == null || result == null) {
+        return null
+      }
+
+      return {
+        type: "toolResponse",
+        requestId,
+        result,
+      }
+    }
+    default:
+      return null
+  }
+}
+
+function parseMessageContent(value: unknown): ApplecartMessageChunk[] | null {
+  const rawContent = asArray(value)
+  if (rawContent == null) {
+    return null
+  }
+
+  return rawContent.flatMap((chunk) => {
+    const parsedChunk = parseMessageChunk(chunk)
+    return parsedChunk == null ? [] : [parsedChunk]
+  })
+}
+
+function parseNormalizedThreadMessage(message: unknown): ThreadMessage | null {
   if (!isRecord(message)) {
-    return false
+    return null
   }
 
-  const isBaseMessage =
-    typeof message.id === "string" &&
-    typeof message.threadId === "string" &&
-    typeof message.createdAt === "number" &&
-    typeof message.text === "string" &&
-    typeof message.role === "string" &&
-    (message.status === undefined || isMessageStatus(message.status))
-
-  if (!isBaseMessage) {
-    return false
+  const id = asString(message.id)
+  const threadId = asString(message.threadId)
+  const createdAt = asNumber(message.createdAt)
+  const text = asString(message.text)
+  const role = asString(message.role)
+  const status = parseMessageStatus(message.status)
+  if (
+    id == null ||
+    threadId == null ||
+    createdAt == null ||
+    text == null ||
+    role == null
+  ) {
+    return null
   }
 
-  if (message.role === "error") {
-    return (
-      isRecord(message.error) && typeof message.error.message === "string"
-    )
+  const baseMessage = {
+    id,
+    threadId,
+    text,
+    createdAt,
+    status,
+    traceId: asOptionalString(message.traceId),
+    inferenceId: asOptionalString(message.inferenceId),
   }
 
-  return (
-    message.role === "agent" ||
-    message.role === "assistant" ||
-    message.role === "system" ||
-    message.role === "tool" ||
-    message.role === "user"
-  )
+  switch (role) {
+    case "agent":
+    case "assistant":
+    case "system":
+    case "tool":
+    case "user":
+      return {
+        ...baseMessage,
+        role,
+        queued: message.queued === true ? true : undefined,
+      }
+    case "error": {
+      const error = parseMessageErrorDetails(message.error)
+      if (error == null) {
+        return null
+      }
+
+      return {
+        ...baseMessage,
+        role: "error",
+        error,
+      }
+    }
+    default:
+      return null
+  }
 }
 
-function isChunkedThreadMessage(message: unknown): message is RawChunkedThreadMessage {
-  return (
-    isRecord(message) &&
-    message.type === "message" &&
-    (message.role === "agent" || message.role === "user") &&
-    typeof message.createdAt === "number" &&
-    Array.isArray(message.content) &&
-    (message.threadId === undefined || typeof message.threadId === "string") &&
-    (message.id === undefined || typeof message.id === "string") &&
-    (message.index === undefined || typeof message.index === "number") &&
-    (message.status === undefined || isMessageStatus(message.status)) &&
-    (message.traceId === undefined || typeof message.traceId === "string") &&
-    (message.inferenceId === undefined || typeof message.inferenceId === "string") &&
-    (typeof message.id === "string" || typeof message.index === "number")
-  )
+function parseChunkedThreadMessage(message: unknown): RawChunkedThreadMessage | null {
+  if (!isRecord(message) || message.type !== "message") {
+    return null
+  }
+
+  const role: RawChunkedThreadMessage["role"] | null =
+    message.role === "agent" || message.role === "user"
+      ? message.role
+      : null
+  const createdAt = asNumber(message.createdAt)
+  const content = parseMessageContent(message.content)
+  if (role == null || createdAt == null || content == null) {
+    return null
+  }
+
+  const parsedMessage = {
+    id: asOptionalString(message.id),
+    threadId: asOptionalString(message.threadId),
+    type: "message" as const,
+    role,
+    index: asNumber(message.index) ?? undefined,
+    createdAt,
+    content,
+    status: parseMessageStatus(message.status),
+    traceId: asOptionalString(message.traceId),
+    inferenceId: asOptionalString(message.inferenceId),
+  }
+
+  if (parsedMessage.id == null && parsedMessage.index == null) {
+    return null
+  }
+
+  return parsedMessage
 }
 
 function toCursorValue(value: unknown): string | null {
@@ -173,42 +394,23 @@ function buildMessageId(args: {
   return `${args.threadId}:${args.index}:${args.role}:${args.createdAt}`
 }
 
-function readTextChunk(chunk: unknown): string | null {
-  if (!isRecord(chunk) || typeof chunk.type !== "string") {
-    return null
-  }
-
-  switch (chunk.type) {
-    case "text":
-      return typeof chunk.content === "string" ? chunk.content : null
-    case "thinking":
-      return isRecord(chunk.content) && chunk.content.type === "text" &&
-        typeof chunk.content.content === "string"
-        ? chunk.content.content
-        : null
-    case "toolRequest":
-      return typeof chunk.tool === "string"
-        ? `[tool request] ${chunk.tool}`
-        : "[tool request]"
-    case "toolResponse":
-      if (
-        isRecord(chunk.result) &&
-        chunk.result.type === "failure" &&
-        typeof chunk.result.reason === "string"
-      ) {
-        return `[tool error] ${chunk.result.reason}`
-      }
-
-      return "[tool response]"
-    default:
-      return null
-  }
-}
-
-export function flattenMessageContent(content: unknown[]): string {
+export function flattenMessageContent(content: ApplecartMessageChunk[]): string {
   return content
-    .map((chunk) => readTextChunk(chunk))
-    .filter((part): part is string => typeof part === "string" && part.length > 0)
+    .flatMap((chunk) => {
+      switch (chunk.type) {
+        case "text":
+          return [chunk.content]
+        case "thinking":
+          return [chunk.content.content]
+        case "toolRequest":
+          return [`[tool request] ${chunk.tool}`]
+        case "toolResponse":
+          return chunk.result.type === "failure"
+            ? [`[tool error] ${chunk.result.reason}`]
+            : ["[tool response]"]
+      }
+    })
+    .filter((part) => part.length > 0)
     .join("\n\n")
 }
 
@@ -216,35 +418,37 @@ export function normalizeThreadMessage(
   message: unknown,
   options?: { defaultThreadId?: string },
 ): ThreadMessage {
-  if (isNormalizedThreadMessage(message)) {
-    return message
+  const normalizedMessage = parseNormalizedThreadMessage(message)
+  if (normalizedMessage) {
+    return normalizedMessage
   }
 
-  if (!isChunkedThreadMessage(message)) {
+  const chunkedMessage = parseChunkedThreadMessage(message)
+  if (chunkedMessage == null) {
     throw new Error("Unsupported thread message payload")
   }
 
-  const threadId = message.threadId ?? options?.defaultThreadId
+  const threadId = chunkedMessage.threadId ?? options?.defaultThreadId
   if (!threadId) {
     throw new Error("Thread message payload is missing threadId")
   }
 
   return {
     id:
-      message.id ??
+      chunkedMessage.id ??
       buildMessageId({
         threadId,
-        index: message.index!,
-        role: message.role,
-        createdAt: message.createdAt,
+        index: chunkedMessage.index!,
+        role: chunkedMessage.role,
+        createdAt: chunkedMessage.createdAt,
       }),
     threadId,
-    role: message.role,
-    text: flattenMessageContent(message.content),
-    createdAt: message.createdAt,
-    status: message.status,
-    traceId: message.traceId,
-    inferenceId: message.inferenceId,
+    role: chunkedMessage.role,
+    text: flattenMessageContent(chunkedMessage.content),
+    createdAt: chunkedMessage.createdAt,
+    status: chunkedMessage.status,
+    traceId: chunkedMessage.traceId,
+    inferenceId: chunkedMessage.inferenceId,
   }
 }
 
@@ -317,31 +521,29 @@ function normalizeChatResponseStreamEvent(
         textDelta: event.textDelta,
       }
     case "message_status":
-      if (typeof event.messageId !== "string" || !isMessageStatus(event.status)) {
+      if (typeof event.messageId !== "string") {
+        throw new Error("Invalid message_status event")
+      }
+
+      const status = parseMessageStatus(event.status)
+      if (status == null) {
         throw new Error("Invalid message_status event")
       }
 
       return {
         type: "message_status",
         messageId: event.messageId,
-        status: event.status,
+        status,
       }
     case "error":
-      if (
-        !isRecord(event.error) ||
-        typeof event.error.message !== "string"
-      ) {
+      const error = parseMessageErrorDetails(event.error)
+      if (error == null) {
         throw new Error("Invalid error event")
       }
 
       return {
         type: "error",
-        error: {
-          code:
-            typeof event.error.code === "string" ? event.error.code : undefined,
-          message: event.error.message,
-          details: event.error.details,
-        },
+        error,
       }
     case "done":
       return { type: "done" }

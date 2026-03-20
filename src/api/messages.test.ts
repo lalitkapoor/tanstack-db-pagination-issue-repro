@@ -12,7 +12,12 @@ describe("flattenMessageContent", () => {
           type: "thinking",
           content: { type: "text", content: "Considering options" },
         },
-        { type: "toolRequest", tool: "search_web" },
+        {
+          type: "toolRequest",
+          id: "tool-1",
+          tool: "search_web",
+          toolArguments: { query: "weather" },
+        },
       ]),
     ).toBe("Hello\n\nConsidering options\n\n[tool request] search_web")
   })
