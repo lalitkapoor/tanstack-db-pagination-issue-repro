@@ -45,7 +45,7 @@ type RawChunkedThreadMessage = {
   role: "agent" | "user"
   index?: number
   createdAt: number
-  content: ApplecartMessageChunk[]
+  content: MessageChunk[]
   status?: MessageStatus
   traceId?: string
   inferenceId?: string
@@ -95,24 +95,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object"
 }
 
-type ApplecartTextChunk = {
+type TextChunk = {
   type: "text"
   content: string
 }
 
-type ApplecartThinkingChunk = {
+type ThinkingChunk = {
   type: "thinking"
-  content: ApplecartTextChunk
+  content: TextChunk
 }
 
-type ApplecartToolRequestChunk = {
+type ToolRequestChunk = {
   type: "toolRequest"
   id: string
   tool: string
   toolArguments: unknown
 }
 
-type ApplecartToolResponseResult =
+type ToolResponseResult =
   | {
       type: "success"
       result: unknown
@@ -122,17 +122,17 @@ type ApplecartToolResponseResult =
       reason: string
     }
 
-type ApplecartToolResponseChunk = {
+type ToolResponseChunk = {
   type: "toolResponse"
   requestId: string
-  result: ApplecartToolResponseResult
+  result: ToolResponseResult
 }
 
-export type ApplecartMessageChunk =
-  | ApplecartTextChunk
-  | ApplecartThinkingChunk
-  | ApplecartToolRequestChunk
-  | ApplecartToolResponseChunk
+export type MessageChunk =
+  | TextChunk
+  | ThinkingChunk
+  | ToolRequestChunk
+  | ToolResponseChunk
 
 function asString(value: unknown) {
   return typeof value === "string" ? value : null
@@ -173,7 +173,7 @@ function parseMessageErrorDetails(value: unknown): MessageErrorDetails | null {
   }
 }
 
-function parseTextChunk(value: unknown): ApplecartTextChunk | null {
+function parseTextChunk(value: unknown): TextChunk | null {
   if (!isRecord(value) || value.type !== "text") {
     return null
   }
@@ -189,7 +189,7 @@ function parseTextChunk(value: unknown): ApplecartTextChunk | null {
   }
 }
 
-function parseToolResponseResult(value: unknown): ApplecartToolResponseResult | null {
+function parseToolResponseResult(value: unknown): ToolResponseResult | null {
   if (!isRecord(value) || typeof value.type !== "string") {
     return null
   }
@@ -216,7 +216,7 @@ function parseToolResponseResult(value: unknown): ApplecartToolResponseResult | 
   }
 }
 
-function parseMessageChunk(value: unknown): ApplecartMessageChunk | null {
+function parseMessageChunk(value: unknown): MessageChunk | null {
   if (!isRecord(value) || typeof value.type !== "string") {
     return null
   }
@@ -267,7 +267,7 @@ function parseMessageChunk(value: unknown): ApplecartMessageChunk | null {
   }
 }
 
-function parseMessageContent(value: unknown): ApplecartMessageChunk[] | null {
+function parseMessageContent(value: unknown): MessageChunk[] | null {
   const rawContent = asArray(value)
   if (rawContent == null) {
     return null
@@ -394,7 +394,7 @@ function buildMessageId(args: {
   return `${args.threadId}:${args.index}:${args.role}:${args.createdAt}`
 }
 
-export function flattenMessageContent(content: ApplecartMessageChunk[]): string {
+export function flattenMessageContent(content: MessageChunk[]): string {
   return content
     .flatMap((chunk) => {
       switch (chunk.type) {
@@ -575,9 +575,7 @@ export class MessagesApi {
   private getApiToken() {
     const token = globalThis.localStorage?.getItem("API_TOKEN")
     if (!token) {
-      throw new Error(
-        "Missing localStorage.API_TOKEN for Applecart message fetches",
-      )
+      throw new Error("Missing localStorage.API_TOKEN for message fetches")
     }
 
     return token
@@ -688,7 +686,7 @@ export class MessagesApi {
       ?.split(";")[0]
       ?.trim()
     if (contentType !== "application/x-ndjson") {
-      throw new Error("Expected NDJSON response from Applecart message stream")
+      throw new Error("Expected NDJSON response from message stream")
     }
 
     for await (const event of this.readNdjson<unknown>(response)) {

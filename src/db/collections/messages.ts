@@ -427,7 +427,7 @@ export class MessagesStore {
       }
 
       const errorMessage =
-        error instanceof Error ? error.message : "Applecart send failed"
+        error instanceof Error ? error.message : "Send failed"
 
       this.collection.utils.writeUpdate({
         id,

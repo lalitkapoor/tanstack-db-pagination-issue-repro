@@ -24,7 +24,7 @@ describe("flattenMessageContent", () => {
 })
 
 describe("normalizeThreadMessage", () => {
-  it("normalizes chunked Applecart messages into flat text messages", () => {
+  it("normalizes chunked messages into flat text messages", () => {
     expect(
       normalizeThreadMessage(
         {
@@ -48,7 +48,7 @@ describe("normalizeThreadMessage", () => {
     })
   })
 
-  it("synthesizes a stable id when Applecart only returns index-based events", () => {
+  it("synthesizes a stable id when the upstream only returns index-based events", () => {
     expect(
       normalizeThreadMessage(
         {

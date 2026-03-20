@@ -16,7 +16,7 @@ export class ThreadsApi {
   private getApiToken() {
     const token = globalThis.localStorage?.getItem("API_TOKEN")
     if (!token) {
-      throw new Error("Missing localStorage.API_TOKEN for Applecart thread fetches")
+      throw new Error("Missing localStorage.API_TOKEN for thread fetches")
     }
 
     return token

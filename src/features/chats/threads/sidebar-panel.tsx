@@ -25,13 +25,13 @@ export function SidebarPanel(props: {
   onSelectThread: (threadId: string) => void
 }) {
   const favoritesQuery = useQuery({
-    queryKey: ["applecart", "sidebar", "favorites"],
+    queryKey: ["sidebar", "favorites"],
     queryFn: fetchSidebarFavorites,
     retry: false,
   })
 
   const recentsQuery = useQuery({
-    queryKey: ["applecart", "sidebar", "recents"],
+    queryKey: ["sidebar", "recents"],
     queryFn: fetchSidebarRecents,
     retry: false,
   })
@@ -76,7 +76,7 @@ export function SidebarPanel(props: {
           </CardTitle>
           <CardDescription>
             {props.activeTab === "home"
-              ? "Applecart favorites and recent pages inside the repro shell."
+              ? "Favorites and recent pages inside the repro shell."
               : "All loaded threads from the local chat repro."}
           </CardDescription>
         </div>
@@ -94,7 +94,7 @@ export function SidebarPanel(props: {
                 items={favoritesQuery.data ?? []}
                 isLoading={favoritesQuery.isLoading}
                 errorMessage={getQueryErrorMessage(favoritesQuery.error)}
-                emptyMessage="No favorite pages returned from Applecart."
+                emptyMessage="No favorite pages returned."
               />
 
               <SidebarSection
@@ -102,7 +102,7 @@ export function SidebarPanel(props: {
                 items={recentsQuery.data ?? []}
                 isLoading={recentsQuery.isLoading}
                 errorMessage={getQueryErrorMessage(recentsQuery.error)}
-                emptyMessage="No recent pages returned from Applecart."
+                emptyMessage="No recent pages returned."
               />
             </>
           ) : (

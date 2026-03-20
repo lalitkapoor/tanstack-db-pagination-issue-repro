@@ -1,6 +1,6 @@
 import { fetchJson } from "./http"
 
-type ApplecartFavoriteRecord = {
+type FavoriteRecord = {
   id: string
   type: string
   title?: string
@@ -9,7 +9,7 @@ type ApplecartFavoriteRecord = {
   updatedAt: number
 }
 
-type ApplecartRecentRecord = {
+type RecentRecord = {
   id: string
   type: string
   title?: string
@@ -17,7 +17,7 @@ type ApplecartRecentRecord = {
   updatedAt: number
 }
 
-type ApplecartSidebarResponse<TRecord> = {
+type SidebarResponse<TRecord> = {
   data: TRecord[]
 }
 
@@ -32,7 +32,7 @@ export type SidebarHomePageItem = {
 function getApiToken() {
   const token = globalThis.localStorage?.getItem("API_TOKEN")
   if (!token) {
-    throw new Error("Missing localStorage.API_TOKEN for Applecart sidebar fetches")
+    throw new Error("Missing localStorage.API_TOKEN for sidebar fetches")
   }
 
   return token
@@ -46,7 +46,7 @@ function sortByUpdatedAt(items: SidebarHomePageItem[]) {
 }
 
 export function normalizeSidebarFavorites(
-  response: ApplecartSidebarResponse<ApplecartFavoriteRecord>,
+  response: SidebarResponse<FavoriteRecord>,
 ): SidebarHomePageItem[] {
   return sortByUpdatedAt(
     response.data.flatMap((item): SidebarHomePageItem[] => {
@@ -69,7 +69,7 @@ export function normalizeSidebarFavorites(
 }
 
 export function normalizeSidebarRecents(
-  response: ApplecartSidebarResponse<ApplecartRecentRecord>,
+  response: SidebarResponse<RecentRecord>,
 ): SidebarHomePageItem[] {
   return sortByUpdatedAt(
     response.data.flatMap((item): SidebarHomePageItem[] => {
@@ -92,7 +92,7 @@ export function normalizeSidebarRecents(
 }
 
 export async function fetchSidebarFavorites() {
-  const response = await fetchJson<ApplecartSidebarResponse<ApplecartFavoriteRecord>>(
+  const response = await fetchJson<SidebarResponse<FavoriteRecord>>(
     "/api/applecart/sidebar/favorites",
     {
       headers: {
@@ -105,7 +105,7 @@ export async function fetchSidebarFavorites() {
 }
 
 export async function fetchSidebarRecents() {
-  const response = await fetchJson<ApplecartSidebarResponse<ApplecartRecentRecord>>(
+  const response = await fetchJson<SidebarResponse<RecentRecord>>(
     "/api/applecart/sidebar/recents",
     {
       headers: {

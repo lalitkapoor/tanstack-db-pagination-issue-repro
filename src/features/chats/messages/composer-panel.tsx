@@ -24,13 +24,12 @@ export function ComposerPanel(props: {
           <CardTitle>Composer</CardTitle>
         </div>
         <CardDescription>
-          Streams Applecart `sendMessage` through the selected thread response
-          route.
+          Streams `sendMessage` through the selected thread response route.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         <Textarea
-          placeholder="Type a message to stream a real Applecart response for this thread..."
+          placeholder="Type a message to stream a real response for this thread..."
           value={props.messageInput}
           disabled={props.disabled}
           onChange={(event) => props.onMessageInputChange(event.target.value)}

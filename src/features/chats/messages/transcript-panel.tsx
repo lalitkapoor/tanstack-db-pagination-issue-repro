@@ -138,8 +138,8 @@ export function TranscriptPanel(props: {
         <div className="max-w-2xl">
           <CardTitle>Messages</CardTitle>
           <CardDescription>
-            History is loaded from Applecart and stays anchored to the moment
-            this thread was selected while streamed sends append in a live tail.
+            History stays anchored to the moment this thread was selected while
+            streamed sends append in a live tail.
           </CardDescription>
         </div>
         <CardAction className="flex items-center gap-2">

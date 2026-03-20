@@ -27,7 +27,7 @@ function getThreadMessagesPath(pathname: string) {
   }
 }
 
-function getApplecartThreadMessagesPath(pathname: string) {
+function getUpstreamThreadMessagesPath(pathname: string) {
   const match = pathname.match(/^\/api\/applecart\/threads\/([^/]+)\/messages$/)
   if (!match) {
     return null
@@ -38,7 +38,7 @@ function getApplecartThreadMessagesPath(pathname: string) {
   }
 }
 
-function getApplecartThreadResponsesPath(pathname: string) {
+function getUpstreamThreadResponsesPath(pathname: string) {
   const match = pathname.match(/^\/api\/applecart\/threads\/([^/]+)\/responses$/)
   if (!match) {
     return null
@@ -49,7 +49,7 @@ function getApplecartThreadResponsesPath(pathname: string) {
   }
 }
 
-function getApplecartUrl() {
+function getUpstreamUrl() {
   return "http://localhost:3000/api/v3/applecart"
 }
 
@@ -63,7 +63,7 @@ function parseBearerToken(req: Request) {
   return match?.[1]?.trim() || null
 }
 
-async function proxyApplecartListThreads(req: Request) {
+async function proxyListThreads(req: Request) {
   const bearerToken = parseBearerToken(req)
   if (!bearerToken) {
     return Response.json({ error: "Missing Authorization header" }, { status: 401, headers: corsHeaders })
@@ -73,7 +73,7 @@ async function proxyApplecartListThreads(req: Request) {
   const limit = Number(url.searchParams.get("limit") || "25")
   const cursor = url.searchParams.get("cursor")
 
-  const upstream = await fetch(getApplecartUrl(), {
+  const upstream = await fetch(getUpstreamUrl(), {
     method: "POST",
     headers: {
       authorization: `Bearer ${bearerToken}`,
@@ -111,13 +111,13 @@ async function proxyApplecartListThreads(req: Request) {
   })
 }
 
-async function proxyApplecartSidebarPayload(req: Request, type: "listFavorites" | "listRecents") {
+async function proxySidebarPayload(req: Request, type: "listFavorites" | "listRecents") {
   const bearerToken = parseBearerToken(req)
   if (!bearerToken) {
     return Response.json({ error: "Missing Authorization header" }, { status: 401, headers: corsHeaders })
   }
 
-  const upstream = await fetch(getApplecartUrl(), {
+  const upstream = await fetch(getUpstreamUrl(), {
     method: "POST",
     headers: {
       authorization: `Bearer ${bearerToken}`,
@@ -137,7 +137,7 @@ async function proxyApplecartSidebarPayload(req: Request, type: "listFavorites" 
   })
 }
 
-async function proxyApplecartListThreadMessages(req: Request, threadId: string) {
+async function proxyListThreadMessages(req: Request, threadId: string) {
   const bearerToken = parseBearerToken(req)
   if (!bearerToken) {
     return Response.json(
@@ -150,7 +150,7 @@ async function proxyApplecartListThreadMessages(req: Request, threadId: string) 
   const limit = Number(url.searchParams.get("limit") || "50")
   const cursor = url.searchParams.get("cursor")
 
-  const upstream = await fetch(getApplecartUrl(), {
+  const upstream = await fetch(getUpstreamUrl(), {
     method: "POST",
     headers: {
       authorization: `Bearer ${bearerToken}`,
@@ -178,7 +178,7 @@ async function proxyApplecartListThreadMessages(req: Request, threadId: string) 
   })
 }
 
-async function proxyApplecartThreadResponse(req: Request, threadId: string) {
+async function proxyThreadResponse(req: Request, threadId: string) {
   const bearerToken = parseBearerToken(req)
   if (!bearerToken) {
     return Response.json(
@@ -216,7 +216,7 @@ async function proxyApplecartThreadResponse(req: Request, threadId: string) {
     idempotencyKey?: string
   }
 
-  const upstream = await fetch(getApplecartUrl(), {
+  const upstream = await fetch(getUpstreamUrl(), {
     method: "POST",
     headers: {
       authorization: `Bearer ${bearerToken}`,
@@ -285,15 +285,15 @@ const server = Bun.serve({
     }
 
     const threadMessagesPath = getThreadMessagesPath(url.pathname)
-    const applecartThreadMessagesPath = getApplecartThreadMessagesPath(url.pathname)
-    const applecartThreadResponsesPath = getApplecartThreadResponsesPath(url.pathname)
+    const upstreamThreadMessagesPath = getUpstreamThreadMessagesPath(url.pathname)
+    const upstreamThreadResponsesPath = getUpstreamThreadResponsesPath(url.pathname)
 
-    if (applecartThreadMessagesPath && req.method === "GET") {
-      return proxyApplecartListThreadMessages(req, applecartThreadMessagesPath.threadId)
+    if (upstreamThreadMessagesPath && req.method === "GET") {
+      return proxyListThreadMessages(req, upstreamThreadMessagesPath.threadId)
     }
 
-    if (applecartThreadResponsesPath && req.method === "POST") {
-      return proxyApplecartThreadResponse(req, applecartThreadResponsesPath.threadId)
+    if (upstreamThreadResponsesPath && req.method === "POST") {
+      return proxyThreadResponse(req, upstreamThreadResponsesPath.threadId)
     }
 
     if (threadMessagesPath && req.method === "GET") {
@@ -401,15 +401,15 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/api/applecart/threads" && req.method === "GET") {
-      return proxyApplecartListThreads(req)
+      return proxyListThreads(req)
     }
 
     if (url.pathname === "/api/applecart/sidebar/favorites" && req.method === "GET") {
-      return proxyApplecartSidebarPayload(req, "listFavorites")
+      return proxySidebarPayload(req, "listFavorites")
     }
 
     if (url.pathname === "/api/applecart/sidebar/recents" && req.method === "GET") {
-      return proxyApplecartSidebarPayload(req, "listRecents")
+      return proxySidebarPayload(req, "listRecents")
     }
 
     if (url.pathname === "/api/threads" && req.method === "POST") {

@@ -29,8 +29,7 @@ export function ListPanel(props: {
           <Badge variant="secondary">{props.threads.length} loaded</Badge>
         </CardAction>
         <CardDescription>
-          Loaded from Applecart `listThreads` and ordered by
-          `updatedAt`.
+          Loaded from `listThreads` and ordered by `updatedAt`.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2">
