@@ -1,12 +1,14 @@
+import { useEffect, useState } from "react"
 import { useLiveInfiniteQuery, useLiveQuery } from "@tanstack/react-db"
-import { Home, Inbox, MessageCircle, Plus, Search, type LucideIcon } from "lucide-react"
+import { MessageCircle, Plus } from "lucide-react"
 import { useAppRuntime } from "~/app-runtime"
 import type { SidebarHomePageItem } from "~/api/sidebar"
 import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { Card, CardContent } from "~/components/ui/card"
 import { formatTimestamp } from "~/lib/format-timestamp"
 import { cn } from "~/lib/utils"
 import { FileText } from "lucide-react"
+import { SidebarChrome } from "./chrome"
 import type { SidebarTab } from "./types"
 
 export function SidebarPanel(props: {
@@ -70,46 +72,10 @@ export function SidebarPanel(props: {
       className="flex h-full min-h-0 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-none"
       size="sm"
     >
-      <CardHeader className="gap-4 border-b border-sidebar-border/80 pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="size-2 rounded-full bg-emerald-500" />
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <SidebarNavIcon
-              icon={Home}
-              active={props.activeTab === "home"}
-              onClick={() => props.onActiveTabChange("home")}
-            />
-            <SidebarPill
-              icon={MessageCircle}
-              label="Chat"
-              active={props.activeTab === "chat"}
-              onClick={() => props.onActiveTabChange("chat")}
-            />
-            <SidebarNavIcon icon={Search} />
-            <SidebarNavIcon icon={Inbox} />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {props.activeTab === "home" ? (
-              <>
-                <Home className="size-4" />
-                Home
-              </>
-            ) : (
-              <>
-                <MessageCircle className="size-4" />
-                Chat
-              </>
-            )}
-          </CardTitle>
-          <CardDescription>
-            {props.activeTab === "home"
-              ? "Favorites and recent pages inside the app shell."
-              : "All loaded threads from the chat feature."}
-          </CardDescription>
-        </div>
-      </CardHeader>
+      <SidebarChrome
+        activeTab={props.activeTab}
+        onActiveTabChange={props.onActiveTabChange}
+      />
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           {props.activeTab === "home" ? (
@@ -122,6 +88,7 @@ export function SidebarPanel(props: {
                 title="Favorites"
                 items={favoritesQuery.data ?? []}
                 isLoading={favoritesQuery.isLoading}
+                isReady={favoritesQuery.isReady}
                 errorMessage={favoritesQuery.isError ? "Favorites could not be loaded." : undefined}
                 emptyMessage="No favorite pages returned."
               />
@@ -130,6 +97,7 @@ export function SidebarPanel(props: {
                 title="Recent"
                 items={recentsQuery.data ?? []}
                 isLoading={recentsQuery.isLoading}
+                isReady={recentsQuery.isReady}
                 errorMessage={recentsQuery.isError ? "Recent items could not be loaded." : undefined}
                 emptyMessage="No recent pages returned."
               />
@@ -163,69 +131,22 @@ export function SidebarPanel(props: {
   )
 }
 
-function SidebarNavIcon(props: {
-  icon: LucideIcon
-  active?: boolean
-  onClick?: () => void
-}) {
-  const Icon = props.icon
-
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className={cn(
-        "flex size-8 items-center justify-center rounded-full transition-colors",
-        props.active
-          ? "bg-foreground/8 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-      )}
-      aria-pressed={props.active}
-    >
-      <Icon className="size-4" />
-    </button>
-  )
-}
-
-function SidebarPill(props: {
-  icon: LucideIcon
-  label: string
-  active?: boolean
-  onClick: () => void
-}) {
-  const Icon = props.icon
-
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className={cn(
-        "flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors",
-        props.active
-          ? "border-blue-500/60 bg-blue-50 text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-      )}
-      aria-pressed={props.active}
-    >
-      <Icon className="size-4" />
-      <span>{props.label}</span>
-    </button>
-  )
-}
-
 function SidebarSection(props: {
   title: string
   items: SidebarHomePageItem[]
   isLoading: boolean
+  isReady: boolean
   errorMessage?: string
   emptyMessage: string
 }) {
+  const showLoadingState = useDelayedValue(props.isLoading, 300)
+
   return (
     <section className="grid gap-2">
       <div className="px-1 text-[0.7rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
         {props.title}
       </div>
-      {props.isLoading ? (
+      {showLoadingState ? (
         <div className="grid gap-1">
           {Array.from({ length: 3 }).map((_, index) => (
             <div
@@ -234,7 +155,7 @@ function SidebarSection(props: {
             />
           ))}
         </div>
-      ) : props.errorMessage ? (
+      ) : !props.isReady ? null : props.errorMessage ? (
         <div className="rounded-md border border-dashed border-destructive/30 bg-background px-3 py-4 text-xs text-destructive">
           {props.errorMessage}
         </div>
@@ -251,6 +172,27 @@ function SidebarSection(props: {
       )}
     </section>
   )
+}
+
+function useDelayedValue(value: boolean, delayMs: number) {
+  const [delayedValue, setDelayedValue] = useState(false)
+
+  useEffect(() => {
+    if (!value) {
+      setDelayedValue(false)
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDelayedValue(true)
+    }, delayMs)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [delayMs, value])
+
+  return delayedValue
 }
 
 function SidebarPageItem(props: {

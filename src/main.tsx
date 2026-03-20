@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "./components/ui/card"
+import { SidebarChrome } from "./features/sidebar/chrome"
 import { App } from "./App"
 import "./index.css"
 
@@ -44,34 +45,44 @@ function AppBootShell() {
 }
 
 function BootSidebarPlaceholder() {
+  const showSkeleton = useDelayedBootSidebarSkeleton(300)
+
   return (
     <Card
       className="flex h-full min-h-0 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-none"
       size="sm"
     >
-      <CardHeader className="gap-4 border-b border-sidebar-border/80 pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="size-2 rounded-full bg-emerald-500" />
-        </div>
-        <div className="space-y-1">
-          <CardTitle className="text-base">Home</CardTitle>
-          <CardDescription>
-            Favorites and recents are loading with the app shell.
-          </CardDescription>
-        </div>
-      </CardHeader>
+      <SidebarChrome activeTab="home" />
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-9 rounded-md bg-foreground/[0.04]"
-            />
-          ))}
+          {showSkeleton ? (
+            Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-9 rounded-md bg-foreground/[0.04]"
+              />
+            ))
+          ) : null}
         </div>
       </CardContent>
     </Card>
   )
+}
+
+function useDelayedBootSidebarSkeleton(delayMs: number) {
+  const [showSkeleton, setShowSkeleton] = React.useState(false)
+
+  React.useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowSkeleton(true)
+    }, delayMs)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [delayMs])
+
+  return showSkeleton
 }
 
 function BootHeader() {
