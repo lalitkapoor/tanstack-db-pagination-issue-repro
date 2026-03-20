@@ -4,10 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AppFrame } from "./app-frame"
 import { AppRuntimeProvider } from "./app-runtime"
 import { initAppRuntime, type AppRuntime } from "./db"
-import { ComposerPanel } from "./features/chats/messages/composer-panel"
-import { ControlsPanel } from "./features/chats/threads/controls-panel"
-import { ListPanel } from "./features/chats/threads/list-panel"
-import { SelectedThreadShell } from "./features/chats/threads/selected-thread-shell"
+import { Badge } from "./components/ui/badge"
+import { Button } from "./components/ui/button"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./components/ui/card"
+import { SidebarChrome } from "./features/sidebar/chrome"
 import { App } from "./App"
 import "./index.css"
 
@@ -22,42 +29,104 @@ const queryClient = new QueryClient({
 
 function AppBootShell() {
   return (
-    <AppFrame fetchCount="--" resetDisabled>
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
-          <ControlsPanel
-            newThreadTitle=""
-            threadLookupId=""
-            onNewThreadTitleChange={() => {}}
-            onThreadLookupIdChange={() => {}}
-            onCreateThread={() => {}}
-            onLoadThreadById={() => {}}
-            disabled
-          />
-          <ListPanel
-            threads={[]}
-            selectedThreadId={null}
-            hasMoreThreads={false}
-            isFetchingMoreThreads={false}
-            onSelectThread={() => {}}
-            onLoadOlderThreads={() => {}}
-          />
+    <AppFrame>
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[24rem_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-hidden">
+          <BootSidebarPlaceholder />
         </div>
 
-        <div className="grid min-h-0 gap-3 lg:grid-rows-[minmax(0,1fr)_auto]">
-          <SelectedThreadShell selectedThreadId={null} messageAnchorCreatedAt={null} />
-          <div>
-            <ComposerPanel
-              selectedThreadId={null}
-              messageInput=""
-              onMessageInputChange={() => {}}
-              onSend={() => {}}
-              disabled
-            />
-          </div>
+        <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
+          <BootHeader />
+          <BootHomePlaceholder />
         </div>
       </div>
     </AppFrame>
+  )
+}
+
+function BootSidebarPlaceholder() {
+  const showSkeleton = useDelayedBootSidebarSkeleton(300)
+
+  return (
+    <Card
+      className="flex h-full min-h-0 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-none"
+      size="sm"
+    >
+      <SidebarChrome activeTab="home" />
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          {showSkeleton ? (
+            Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-9 rounded-md bg-foreground/[0.04]"
+              />
+            ))
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function useDelayedBootSidebarSkeleton(delayMs: number) {
+  const [showSkeleton, setShowSkeleton] = React.useState(false)
+
+  React.useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowSkeleton(true)
+    }, delayMs)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [delayMs])
+
+  return showSkeleton
+}
+
+function BootHeader() {
+  return (
+    <Card className="border border-border/60 shadow-none">
+      <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div className="space-y-1">
+          <Badge variant="outline" className="w-fit">
+            TanStack DB Testbed
+          </Badge>
+          <CardTitle className="text-lg">Threads + Messages Repro</CardTitle>
+          <CardDescription className="max-w-2xl">
+            Exercises paginated thread lists, selected thread detail
+            fetches, and nested thread-scoped message routes.
+          </CardDescription>
+        </div>
+        <CardAction className="flex items-center gap-2">
+          <Badge
+            variant="secondary"
+            className="h-7 px-2.5 text-[0.625rem] tabular-nums"
+          >
+            <span>fetches </span>
+            --
+          </Badge>
+          <Button variant="outline" disabled>
+            Reset SQLite
+          </Button>
+        </CardAction>
+      </CardHeader>
+    </Card>
+  )
+}
+
+function BootHomePlaceholder() {
+  return (
+    <Card className="border border-border/60 shadow-none">
+      <CardHeader>
+        <CardTitle>Home</CardTitle>
+        <CardDescription>
+          Favorites and recents are available in the sidebar while the app runtime
+          is initializing.
+        </CardDescription>
+      </CardHeader>
+    </Card>
   )
 }
 
@@ -74,24 +143,20 @@ function Root() {
       })
   }, [])
 
-  if (error) {
-    return (
-      <div style={{ padding: 20, color: "red" }}>
-        <h2>Init failed</h2>
-        <pre>{error}</pre>
-      </div>
-    )
-  }
-
-  if (!runtime) {
-    return <AppBootShell />
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
-      <AppRuntimeProvider runtime={runtime}>
-        <App />
-      </AppRuntimeProvider>
+      {error ? (
+        <div style={{ padding: 20, color: "red" }}>
+          <h2>Init failed</h2>
+          <pre>{error}</pre>
+        </div>
+      ) : !runtime ? (
+        <AppBootShell />
+      ) : (
+        <AppRuntimeProvider runtime={runtime}>
+          <App />
+        </AppRuntimeProvider>
+      )}
     </QueryClientProvider>
   )
 }

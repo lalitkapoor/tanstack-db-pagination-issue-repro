@@ -46,6 +46,10 @@ type MessageQueryShape =
       afterCreatedAt: number
     }
 
+function assertNeverMessageRole(message: never): never {
+  throw new Error(`Unhandled message role: ${JSON.stringify(message)}`)
+}
+
 export class MessagesStore {
   private collectionInstance: ReturnType<
     MessagesStore["createCollection"]
@@ -58,11 +62,7 @@ export class MessagesStore {
     private readonly api: Api,
   ) {}
 
-  private assertNeverMessageRole(message: never): never {
-    throw new Error(`Unhandled message role: ${JSON.stringify(message)}`)
-  }
-
-  private toMessageRow(message: ThreadMessage): Message {
+  private toStoredMessageRow(message: ThreadMessage): Message {
     const baseRow = {
       id: message.id,
       threadId: message.threadId,
@@ -73,6 +73,7 @@ export class MessagesStore {
     }
 
     switch (message.role) {
+      case "agent":
       case "user":
       case "assistant":
       case "system":
@@ -91,7 +92,7 @@ export class MessagesStore {
           errorMessage: message.error.message,
         }
       default:
-        return this.assertNeverMessageRole(message)
+        return assertNeverMessageRole(message)
     }
   }
 
@@ -234,7 +235,7 @@ export class MessagesStore {
   }) {
     const response = await this.api.messages.list(args)
 
-    return response.data.map((message) => this.toMessageRow(message)).reverse()
+    return response.data.map((message) => this.toStoredMessageRow(message)).reverse()
   }
 
   private replaceOptimisticMessage(args: {
@@ -276,7 +277,7 @@ export class MessagesStore {
           const pendingText = pendingTextByMessageId.get(event.message.id) ?? ""
           const pendingStatus = pendingStatusByMessageId.get(event.message.id)
           const row = {
-            ...this.toMessageRow(event.message),
+            ...this.toStoredMessageRow(event.message),
             content: `${event.message.text}${pendingText}`,
             status: pendingStatus ?? event.message.status,
           }
@@ -426,7 +427,7 @@ export class MessagesStore {
       }
 
       const errorMessage =
-        error instanceof Error ? error.message : "Applecart send failed"
+        error instanceof Error ? error.message : "Send failed"
 
       this.collection.utils.writeUpdate({
         id,
