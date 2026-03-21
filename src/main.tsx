@@ -759,10 +759,10 @@ function App() {
         },
       }),
   )
-  const [activeThreadId, setActiveThreadId] = React.useState(getInitialThreadId)
-  const [anchorCreatedAt, setAnchorCreatedAt] = React.useState<number | null>(
-    null,
-  )
+  const [chatSelection, setChatSelection] = React.useState(() => ({
+    threadId: getInitialThreadId(),
+    anchorCreatedAt: getInitialAnchorCreatedAt(),
+  }))
   const [fetchCount, setFetchCount] = React.useState(0)
   const [collection, setCollection] = React.useState<ReturnType<
     typeof createMessagesCollection
@@ -841,14 +841,12 @@ function App() {
     }
   }, [queryClient])
 
-  React.useEffect(() => {
-    if (!activeThreadId) {
-      setAnchorCreatedAt(null)
-      return
-    }
-
-    setAnchorCreatedAt(Date.now())
-  }, [activeThreadId])
+  const handleSelectThread = React.useCallback((threadId: string) => {
+    setChatSelection({
+      threadId,
+      anchorCreatedAt: Date.now(),
+    })
+  }, [])
 
   const resetLocalState = React.useCallback(async () => {
     await collection?.cleanup()
@@ -858,19 +856,19 @@ function App() {
   }, [collection, database])
 
   React.useEffect(() => {
-    if (anchorCreatedAt == null) {
+    if (chatSelection.anchorCreatedAt == null) {
       return
     }
 
     const params = new URLSearchParams(window.location.search)
-    params.set("threadId", activeThreadId)
-    params.set("anchorCreatedAt", String(anchorCreatedAt))
+    params.set("threadId", chatSelection.threadId)
+    params.set("anchorCreatedAt", String(chatSelection.anchorCreatedAt))
     window.history.replaceState(
       null,
       "",
       `${window.location.pathname}?${params.toString()}`,
     )
-  }, [activeThreadId, anchorCreatedAt])
+  }, [chatSelection])
 
   React.useEffect(() => {
     ;(
@@ -881,10 +879,10 @@ function App() {
         }
       }
     ).__minimalAppState = {
-      activeThreadId,
-      anchorCreatedAt,
+      activeThreadId: chatSelection.threadId,
+      anchorCreatedAt: chatSelection.anchorCreatedAt,
     }
-  }, [activeThreadId, anchorCreatedAt])
+  }, [chatSelection])
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -921,13 +919,13 @@ function App() {
             <span style={{ fontSize: 13, color: "#666" }}>Threads</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {SEEDED_THREADS.map((thread) => {
-                const isActive = thread.id === activeThreadId
+                const isActive = thread.id === chatSelection.threadId
 
                 return (
                   <button
                     key={thread.id}
                     type="button"
-                    onClick={() => setActiveThreadId(thread.id)}
+                    onClick={() => handleSelectThread(thread.id)}
                     style={{
                       border: `1px solid ${isActive ? "#18181b" : "#d4d4d8"}`,
                       background: isActive ? "#18181b" : "white",
@@ -963,10 +961,10 @@ function App() {
           <div style={{ display: "grid", gap: 4, fontSize: 13, color: "#666" }}>
             <div>
               Active thread:{" "}
-              {SEEDED_THREADS.find((thread) => thread.id === activeThreadId)?.title ??
-                activeThreadId}
+              {SEEDED_THREADS.find((thread) => thread.id === chatSelection.threadId)
+                ?.title ?? chatSelection.threadId}
             </div>
-            <div>Anchor createdAt: {anchorCreatedAt}</div>
+            <div>Anchor createdAt: {chatSelection.anchorCreatedAt}</div>
             <div>Fetch count: {fetchCount}</div>
             <div>
               Expected stable counts:{" "}
@@ -989,11 +987,11 @@ function App() {
           >
             {error}
           </pre>
-        ) : collection && anchorCreatedAt != null ? (
+        ) : collection && chatSelection.anchorCreatedAt != null ? (
           <MessagesHistoryPanel
             collection={collection}
-            threadId={activeThreadId}
-            anchorCreatedAt={anchorCreatedAt}
+            threadId={chatSelection.threadId}
+            anchorCreatedAt={chatSelection.anchorCreatedAt}
           />
         ) : (
           <MessagesPanelFrame
