@@ -1,107 +1,70 @@
-# TanStack DB v2-message-query-minimal repro
+# TanStack DB `v2-message-query-retained-state`
 
-This branch is a minimal reproduction harness for the TanStack DB warm-start history/live query bug, using the local SQLite server as the data source.
+This branch is a small TanStack DB app for reproducing a retained-state bug across thread switches.
 
-It is not the older full chat app repro, and it is not the Applecart-backed `v3` branch.
+The UI is intentionally tiny:
 
-The goal on `v2-message-query-minimal` is:
+- two thread buttons
+- one transcript panel
+- one loaded-count badge
+- one `Reset local persistence` button
 
-- keep the frontend as close as possible to `v3-message-query-minimal`
-- keep the backend powered by the seeded local SQLite server
-- isolate one historical query and one disjoint live query
-- make warm-start timing behavior easy to observe with logs
+The two expected healthy transcript sizes are:
 
-The main files are:
+- `Create additional paragraphs` -> `25 loaded`
+- `Casual greeting` -> `6 loaded`
+
+If the bug is present, the transcript counts degrade to:
+
+- first thread -> `1 loaded`
+- second thread -> `0 loaded`
+
+## What this branch demonstrates
+
+This branch is meant to show three separate things:
+
+1. the app bug
+2. the narrow app fix
+3. that the narrow fix does not heal already-corrupted persisted local state
+
+The app bug is:
+
+- the selected thread id is updated first
+- the opened-at timestamp used as the transcript cutoff is updated later in a `useEffect`
+
+That creates a transient bad filter set for the query:
+
+- new thread id
+- old thread timestamp
+
+Once that bad query has been mounted and persisted, switching back to the fixed code is not enough to repair the local SQLite state. Resetting local persistence is what clears it.
+
+## Important commits
+
+- `c06c378` `Add v2 minimal retained-state repro`
+  - branch setup, two seeded threads, `v0.1.1-pr1380`
+- `4c92f19` `Show short transcripts once settled`
+  - fixes a UI gate so a real short thread can show `6 loaded`
+- `c9ae9db` `Reintroduce delayed anchor bug in v2 minimal app`
+  - intentionally broken version
+- `a6530f2` `Restore atomic thread selection in v2 minimal app`
+  - narrow app fix
+
+The branch `HEAD` is currently:
+
+- `a6530f2`
+
+So the default branch state is the fixed version.
+
+## Main files
 
 - [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx)
 - [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts)
 - [server/database.ts](/Users/lalit/notion/tanstack-db-experiments/server/database.ts)
+- [src/shared/seed.ts](/Users/lalit/notion/tanstack-db-experiments/src/shared/seed.ts)
+- [package.json](/Users/lalit/notion/tanstack-db-experiments/package.json)
 
-## The problem
-
-The app has one shared persisted message collection.
-
-Two queries read into that collection:
-
-- `history`
-  - messages up to an anchor timestamp
-- `live`
-  - messages after that anchor timestamp
-
-The bug is a warm-start timing bug:
-
-1. history rows are restored or become visible in a fresh session
-2. the disjoint `live` query runs
-3. if the timing is bad, the shared collection can briefly lose the history rows
-4. the history query then repopulates them
-
-When the bug happens, the underlying query state looks like:
-
-- full history visible
-- then empty
-- then recovered history
-
-On the `v3` minimal branch, this showed up as traces like:
-
-- `25 -> 0 -> 13 -> 25`
-- `25 -> 0 -> 1 -> 25`
-
-## Current branch state
-
-This branch is already configured to reproduce the bug.
-
-The repro ingredients are:
-
-1. the `live` query returns an empty result in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx):
-
-```ts
-if (query.kind === "live") {
-  // Uncomment to make the warm-path repro stable again.
-  // await new Promise((resolve) => setTimeout(resolve, 200))
-  const rows: MessageRow[] = []
-  return rows
-}
-```
-
-2. the history route is artificially delayed in [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts):
-
-```ts
-const HISTORY_RESPONSE_DELAY_MS = 100
-```
-
-The important finding on this branch is:
-
-- this bug is a timing-sensitive race
-- the bad transition happens when the empty `live` result lands before `history` has stabilized
-- on the SQLite-backed `v2` branch, the `100ms` server delay is what makes that race visible enough to reproduce reliably
-
-The server delay applies only to the normal history route:
-
-- `GET /api/threads/:threadId/messages`
-
-It does not apply to the `afterCreatedAt` live-tail route.
-
-The key transition we observed is:
-
-- `historyCount: 25`, `collectionSize: 26`
-- then `historyCount: 0`, `collectionSize: 0`
-- then back to `historyCount: 25`, `collectionSize: 26`
-
-## Why the UI may still look calmer than the logs
-
-This branch uses the same gated message panel as `v3-message-query-minimal`.
-
-That means:
-
-- the UI avoids painting some intermediate states
-- but the underlying query/collection logs can still show the reset
-
-So when checking whether the bug is happening, use both:
-
-- the browser UI
-- the `MinimalMessageQueryLab` console logs
-
-## Run the branch
+## Run the app
 
 Install dependencies:
 
@@ -109,7 +72,7 @@ Install dependencies:
 bun install
 ```
 
-Start the SQLite-backed server:
+Start the server:
 
 ```bash
 bun run dev:server
@@ -125,73 +88,168 @@ Open:
 
 - `http://localhost:11000`
 
-## Seed data
+The server uses a branch-specific SQLite file:
 
-The local server seeds one thread and 200 messages in SQLite.
+- `.data/v2-message-query-retained-state.sqlite`
 
-The default seeded thread id is:
+The client uses an OPFS SQLite file whose name starts with:
 
-- `00000000-0000-4000-8000-000000000001`
+- `v2-message-query-retained-state`
 
-That constant comes from:
+## The two seeded threads
 
-- [src/shared/seed.ts](/Users/lalit/notion/tanstack-db-experiments/src/shared/seed.ts)
+Thread 1:
 
-## Reproduce the issue
+- id: `00000000-0000-4000-8000-000000000001`
+- label: `Create additional paragraphs`
+- expected healthy visible count: `25`
 
-1. Start the server and client.
-2. Open:
-   - `http://localhost:11000/?threadId=00000000-0000-4000-8000-000000000001`
-3. Let the page settle so the URL gains `anchorCreatedAt`.
-4. Reload that same URL.
-5. Watch:
-   - the browser UI
-   - the DevTools console logs from `MinimalMessageQueryLab`
+Thread 2:
 
-Expected result with the current branch state:
+- id: `00000000-0000-4000-8000-000000000202`
+- label: `Casual greeting`
+- expected healthy visible count: `6`
 
-- the `live` query returns `0`
-- the delayed history path creates the bad timing window
-- history briefly drops out of the shared collection
-- history then repopulates
+## Reproduce the bug from scratch
 
-The key transition we observed was:
+This is the exact flow that matches the stronger `v3` behavior.
 
-- `25 / 26`
-- `0 / 0`
-- `25 / 26`
+### 1. Move to the intentionally broken commit
 
-where each pair means:
-
-- `historyCount / collectionSize`
-
-## How to make this branch stable again
-
-The simplest stabilization experiment on this branch is:
-
-1. keep `return []`
-2. keep `HISTORY_RESPONSE_DELAY_MS = 100`
-3. uncomment this line in [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx):
-
-```ts
-await new Promise((resolve) => setTimeout(resolve, 200))
+```bash
+git checkout c9ae9db
 ```
 
-In our testing, that was enough to make the delayed-history branch stable again.
+Reload the page.
 
-## Practical interpretation
+If you want a completely clean starting point, click:
 
-This branch shows that the bug is not just about query shape. It is about ordering.
+- `Reset local persistence`
 
-- the same empty `live` result can be harmless or destructive depending on when it lands
-- on `v2`, we needed to widen the race window with the `100ms` history delay
-- uncommenting the `200ms` client delay line makes the branch stable again because it lets `history` settle first
+### 2. Create the bad persisted state
 
-## Useful files
+Switch threads in this order:
 
-- [README.md](/Users/lalit/notion/tanstack-db-experiments/README.md)
-- [src/main.tsx](/Users/lalit/notion/tanstack-db-experiments/src/main.tsx)
-- [server.ts](/Users/lalit/notion/tanstack-db-experiments/server.ts)
-- [server/database.ts](/Users/lalit/notion/tanstack-db-experiments/server/database.ts)
-- [src/shared/seed.ts](/Users/lalit/notion/tanstack-db-experiments/src/shared/seed.ts)
-- [package.json](/Users/lalit/notion/tanstack-db-experiments/package.json)
+1. `Create additional paragraphs`
+2. `Casual greeting`
+3. `Create additional paragraphs`
+4. `Casual greeting`
+5. `Create additional paragraphs`
+
+The observed sequence should become:
+
+- second thread -> `6 loaded`
+- first thread -> `25 loaded`
+- second thread -> `0 loaded`
+- first thread -> `1 loaded`
+
+After that point, the app is in the corrupted state:
+
+- first thread stays at `1 loaded`
+- second thread stays at `0 loaded`
+
+### 3. Move to the fixed commit without resetting local persistence
+
+```bash
+git checkout a6530f2
+```
+
+Reload the same browser tab.
+
+Do **not** click `Reset local persistence`.
+
+At this point, the app bug in code is fixed, but the old bad local state is still present.
+
+Observed behavior:
+
+- the first thread may initially render `25 loaded`
+- but once you switch again, the stale state is still there
+
+The sequence we verified was:
+
+- second thread -> `6 loaded`
+- first thread -> `1 loaded`
+- second thread -> `0 loaded`
+- first thread -> `1 loaded`
+
+That is the important point:
+
+- fixing the app bug does not heal already-corrupted local SQLite state
+
+### 4. Reset local persistence on the fixed commit
+
+Still on `a6530f2`, click:
+
+- `Reset local persistence`
+
+Then switch threads again.
+
+Expected healthy behavior:
+
+- second thread -> `6 loaded`
+- first thread -> `25 loaded`
+- second thread -> `6 loaded`
+- first thread -> `25 loaded`
+
+That is the one-to-one reproduction:
+
+1. broken commit creates bad persisted state
+2. fixed commit does not heal it
+3. resetting local persistence does heal it
+
+## What the broken code is
+
+The intentionally broken version updates the selected thread id first and the timestamp later:
+
+```tsx
+const [activeThreadId, setActiveThreadId] = React.useState(getInitialThreadId)
+const [anchorCreatedAt, setAnchorCreatedAt] = React.useState<number | null>(null)
+
+React.useEffect(() => {
+  if (!activeThreadId) {
+    setAnchorCreatedAt(null)
+    return
+  }
+
+  setAnchorCreatedAt(Date.now())
+}, [activeThreadId])
+```
+
+That allows a transient wrong query:
+
+```tsx
+q.from({ message: collection }).where(({ message }) =>
+  and(
+    eq(message.threadId, newThreadId),
+    lte(message.createdAt, oldThreadTimestamp),
+  ),
+)
+```
+
+## What the narrow fix is
+
+The fixed version updates both values atomically:
+
+```tsx
+const [chatSelection, setChatSelection] = React.useState(() => ({
+  threadId: getInitialThreadId(),
+  anchorCreatedAt: getInitialAnchorCreatedAt(),
+}))
+
+const handleSelectThread = React.useCallback((threadId: string) => {
+  setChatSelection({
+    threadId,
+    anchorCreatedAt: Date.now(),
+  })
+}, [])
+```
+
+That prevents the bad filter from being created going forward.
+
+What it does **not** do is repair a bad retained state that was already written into local SQLite by the broken version.
+
+## Notes
+
+- This branch uses `v0.1.1-pr1380`.
+- The second thread really does have 6 messages on the server.
+- The `0 loaded` and `1 loaded` states are not missing seed data; they are the result of bad retained query state.
