@@ -586,13 +586,21 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
 
   const hasResolvedInitialHistoryPage =
     historyMessages.length >= INITIAL_HISTORY_PAGE_SIZE
+  const hasResolvedShortTranscript =
+    !isHistoryLoading &&
+    !isLiveLoading &&
+    !isLoadingSubset &&
+    !hasMoreMessages &&
+    historyMessages.length > 0
   const hasResolvedEmptyTranscript =
     !isHistoryLoading &&
     !isLiveLoading &&
     !isLoadingSubset &&
     collection.size === 0
   const hasResolvedInitialTranscript =
-    hasResolvedInitialHistoryPage || hasResolvedEmptyTranscript
+    hasResolvedInitialHistoryPage ||
+    hasResolvedShortTranscript ||
+    hasResolvedEmptyTranscript
   const isTranscriptReady =
     isHistoryReady &&
     isLiveReady &&
