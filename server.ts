@@ -3,6 +3,7 @@
  * SQLite-backed REST API and SSE endpoint.
  */
 
+import { join } from "node:path"
 import { createServerDatabase } from "./server/database"
 import { createEventHub } from "./server/sse"
 import type { Message, Thread } from "./server/types"
@@ -15,7 +16,9 @@ const corsHeaders = {
 
 const HISTORY_RESPONSE_DELAY_MS = 100
 
-const database = createServerDatabase()
+const database = createServerDatabase({
+  path: join(process.cwd(), ".data", "v2-message-query-retained-state.sqlite"),
+})
 const events = createEventHub(corsHeaders)
 
 function getThreadMessagesPath(pathname: string) {

@@ -24,12 +24,25 @@ import {
   useLiveQuery,
 } from "@tanstack/react-db"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { SEEDED_THREAD_ID } from "@/shared/seed"
+import { SECOND_SEEDED_THREAD_ID, SEEDED_THREAD_ID } from "@/shared/seed"
 import "./index.css"
 
-const DATABASE_NAME = "v2-message-query-minimal.sqlite"
+const DATABASE_NAME = "v2-message-query-retained-state.sqlite"
 const INITIAL_HISTORY_PAGE_SIZE = 25
 const LAB_DEBUG_LABEL = "[MinimalMessageQueryLab]"
+
+const SEEDED_THREADS = [
+  {
+    id: SEEDED_THREAD_ID,
+    title: "Create additional paragraphs",
+    expectedCount: 25,
+  },
+  {
+    id: SECOND_SEEDED_THREAD_ID,
+    title: "Casual greeting",
+    expectedCount: 6,
+  },
+] as const
 
 type MessageRow = {
   id: string
@@ -746,10 +759,9 @@ function App() {
         },
       }),
   )
-  const [threadIdInput, setThreadIdInput] = React.useState(getInitialThreadId)
   const [activeThreadId, setActiveThreadId] = React.useState(getInitialThreadId)
-  const [anchorCreatedAt, setAnchorCreatedAt] = React.useState(
-    getInitialAnchorCreatedAt,
+  const [anchorCreatedAt, setAnchorCreatedAt] = React.useState<number | null>(
+    null,
   )
   const [fetchCount, setFetchCount] = React.useState(0)
   const [collection, setCollection] = React.useState<ReturnType<
@@ -829,33 +841,27 @@ function App() {
     }
   }, [queryClient])
 
-  const runQuery = React.useCallback(() => {
-    const trimmedThreadId = threadIdInput.trim()
-    if (!trimmedThreadId) {
+  React.useEffect(() => {
+    if (!activeThreadId) {
+      setAnchorCreatedAt(null)
       return
     }
 
-    const nextAnchorCreatedAt = Date.now()
-    setActiveThreadId(trimmedThreadId)
-    setAnchorCreatedAt(nextAnchorCreatedAt)
-    const params = new URLSearchParams(window.location.search)
-    params.set("threadId", trimmedThreadId)
-    params.set("anchorCreatedAt", String(nextAnchorCreatedAt))
-    window.history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}?${params.toString()}`,
-    )
-  }, [threadIdInput])
+    setAnchorCreatedAt(Date.now())
+  }, [activeThreadId])
 
   const resetLocalState = React.useCallback(async () => {
     await collection?.cleanup()
     await database?.close?.()
-    await removeDatabaseFiles("v2-message-query-minimal")
+    await removeDatabaseFiles("v2-message-query-retained-state")
     window.location.reload()
   }, [collection, database])
 
   React.useEffect(() => {
+    if (anchorCreatedAt == null) {
+      return
+    }
+
     const params = new URLSearchParams(window.location.search)
     params.set("threadId", activeThreadId)
     params.set("anchorCreatedAt", String(anchorCreatedAt))
@@ -864,6 +870,20 @@ function App() {
       "",
       `${window.location.pathname}?${params.toString()}`,
     )
+  }, [activeThreadId, anchorCreatedAt])
+
+  React.useEffect(() => {
+    ;(
+      window as Window & {
+        __minimalAppState?: {
+          activeThreadId: string
+          anchorCreatedAt: number | null
+        }
+      }
+    ).__minimalAppState = {
+      activeThreadId,
+      anchorCreatedAt,
+    }
   }, [activeThreadId, anchorCreatedAt])
 
   return (
@@ -879,12 +899,12 @@ function App() {
       >
         <header style={{ display: "grid", gap: 8 }}>
           <h1 style={{ margin: 0, fontSize: 28 }}>
-            TanStack DB Message Query Minimal Repro
+            TanStack DB Thread Switch Minimal App
           </h1>
           <p style={{ margin: 0, color: "#666", maxWidth: 860 }}>
-            Single-file reproduction focused only on OPFS-persisted TanStack DB
-            message history queries. No app shell, no thread list, no composer,
-            and no store wrappers.
+            Small SQLite-backed TanStack DB app for reproducing a retained query
+            corruption bug across thread switches. This intentionally keeps only
+            thread selection and the transcript panel.
           </p>
         </header>
 
@@ -897,36 +917,34 @@ function App() {
             padding: 16,
           }}
         >
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, color: "#666" }}>Thread ID</span>
-            <input
-              value={threadIdInput}
-              onChange={(event) => setThreadIdInput(event.target.value)}
-              placeholder="Enter thread id"
-              style={{
-                border: "1px solid #d4d4d8",
-                borderRadius: 8,
-                padding: "10px 12px",
-                font: "inherit",
-              }}
-            />
-          </label>
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, color: "#666" }}>Threads</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {SEEDED_THREADS.map((thread) => {
+                const isActive = thread.id === activeThreadId
+
+                return (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => setActiveThreadId(thread.id)}
+                    style={{
+                      border: `1px solid ${isActive ? "#18181b" : "#d4d4d8"}`,
+                      background: isActive ? "#18181b" : "white",
+                      color: isActive ? "white" : "#18181b",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {thread.title}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={runQuery}
-              style={{
-                border: "1px solid #18181b",
-                background: "#18181b",
-                color: "white",
-                borderRadius: 8,
-                padding: "10px 14px",
-                cursor: "pointer",
-              }}
-            >
-              Run query
-            </button>
             <button
               type="button"
               onClick={resetLocalState}
@@ -943,9 +961,17 @@ function App() {
           </div>
 
           <div style={{ display: "grid", gap: 4, fontSize: 13, color: "#666" }}>
-            <div>Active thread: {activeThreadId}</div>
+            <div>
+              Active thread:{" "}
+              {SEEDED_THREADS.find((thread) => thread.id === activeThreadId)?.title ??
+                activeThreadId}
+            </div>
             <div>Anchor createdAt: {anchorCreatedAt}</div>
             <div>Fetch count: {fetchCount}</div>
+            <div>
+              Expected stable counts:{" "}
+              {SEEDED_THREADS.map((thread) => `${thread.title}=${thread.expectedCount}`).join(", ")}
+            </div>
           </div>
         </section>
 
@@ -963,7 +989,7 @@ function App() {
           >
             {error}
           </pre>
-        ) : collection ? (
+        ) : collection && anchorCreatedAt != null ? (
           <MessagesHistoryPanel
             collection={collection}
             threadId={activeThreadId}

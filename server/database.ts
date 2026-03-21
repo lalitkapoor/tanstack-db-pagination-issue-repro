@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { SEEDED_THREAD_ID } from "../src/shared/seed"
+import { SECOND_SEEDED_THREAD_ID, SEEDED_THREAD_ID } from "../src/shared/seed"
 import type { Message, Thread } from "./types"
 
 const SEED_BASE = 1735689600000
-const BOOTSTRAP_VERSION = "1"
+const BOOTSTRAP_VERSION = "2"
 
 type ThreadRow = {
   id: string
@@ -224,18 +224,35 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
   function seedDatabaseUnsafe() {
     insertThreadStatement.run(
       SEEDED_THREAD_ID,
-      "Thread 1",
+      "Create additional paragraphs",
       SEED_BASE,
-      SEED_BASE + 199000,
+      SEED_BASE + 39000,
     )
 
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 40; i++) {
       insertMessageStatement.run(
         makeSeedMessageId(i),
         SEEDED_THREAD_ID,
         i % 2 === 0 ? "user" : "assistant",
         `Message #${i + 1}`,
         SEED_BASE + i * 1000,
+      )
+    }
+
+    insertThreadStatement.run(
+      SECOND_SEEDED_THREAD_ID,
+      "Casual greeting",
+      SEED_BASE + 100000,
+      SEED_BASE + 105000,
+    )
+
+    for (let i = 0; i < 6; i++) {
+      insertMessageStatement.run(
+        `00000000-0000-4000-8000-${(300 + i).toString(16).padStart(12, "0")}`,
+        SECOND_SEEDED_THREAD_ID,
+        i % 2 === 0 ? "user" : "assistant",
+        `Greeting message #${i + 1}`,
+        SEED_BASE + 100000 + i * 1000,
       )
     }
   }
