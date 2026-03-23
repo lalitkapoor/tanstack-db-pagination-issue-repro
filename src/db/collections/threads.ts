@@ -173,6 +173,7 @@ export class ThreadsStore {
       queryFn: (ctx) => this.fetchThreads(ctx.meta?.loadSubsetOptions ?? {}),
       queryClient: this.queryClient,
       getKey: (thread) => thread.id,
+      persistedGcTime: Number.POSITIVE_INFINITY,
       onInsert: async ({ transaction }) => {
         const persistedThreads: Thread[] = []
 

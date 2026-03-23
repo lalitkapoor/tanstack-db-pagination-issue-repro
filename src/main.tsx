@@ -767,10 +767,10 @@ function App() {
         },
       }),
   )
-  const [chatSelection, setChatSelection] = React.useState(() => ({
-    threadId: getInitialThreadId(),
-    anchorCreatedAt: getInitialAnchorCreatedAt(),
-  }))
+  const [activeThreadId, setActiveThreadId] = React.useState(getInitialThreadId)
+  const [anchorCreatedAt, setAnchorCreatedAt] = React.useState<number | null>(
+    getInitialAnchorCreatedAt(),
+  )
   const [fetchCount, setFetchCount] = React.useState(0)
   const [collection, setCollection] = React.useState<ReturnType<
     typeof createMessagesCollection
@@ -850,11 +850,17 @@ function App() {
   }, [queryClient])
 
   const handleSelectThread = React.useCallback((threadId: string) => {
-    setChatSelection({
-      threadId,
-      anchorCreatedAt: Date.now(),
-    })
+    setActiveThreadId(threadId)
   }, [])
+
+  React.useEffect(() => {
+    if (!activeThreadId) {
+      setAnchorCreatedAt(null)
+      return
+    }
+
+    setAnchorCreatedAt(Date.now())
+  }, [activeThreadId])
 
   const resetLocalState = React.useCallback(async () => {
     await collection?.cleanup()
@@ -864,19 +870,19 @@ function App() {
   }, [collection, database])
 
   React.useEffect(() => {
-    if (chatSelection.anchorCreatedAt == null) {
+    if (anchorCreatedAt == null) {
       return
     }
 
     const params = new URLSearchParams(window.location.search)
-    params.set("threadId", chatSelection.threadId)
-    params.set("anchorCreatedAt", String(chatSelection.anchorCreatedAt))
+    params.set("threadId", activeThreadId)
+    params.set("anchorCreatedAt", String(anchorCreatedAt))
     window.history.replaceState(
       null,
       "",
       `${window.location.pathname}?${params.toString()}`,
     )
-  }, [chatSelection])
+  }, [activeThreadId, anchorCreatedAt])
 
   React.useEffect(() => {
     ;(
@@ -887,10 +893,10 @@ function App() {
         }
       }
     ).__minimalAppState = {
-      activeThreadId: chatSelection.threadId,
-      anchorCreatedAt: chatSelection.anchorCreatedAt,
+      activeThreadId,
+      anchorCreatedAt,
     }
-  }, [chatSelection])
+  }, [activeThreadId, anchorCreatedAt])
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -927,7 +933,7 @@ function App() {
             <span style={{ fontSize: 13, color: "#666" }}>Threads</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {SEEDED_THREADS.map((thread) => {
-                const isActive = thread.id === chatSelection.threadId
+                const isActive = thread.id === activeThreadId
 
                 return (
                   <button
@@ -969,10 +975,10 @@ function App() {
           <div style={{ display: "grid", gap: 4, fontSize: 13, color: "#666" }}>
             <div>
               Active thread:{" "}
-              {SEEDED_THREADS.find((thread) => thread.id === chatSelection.threadId)
-                ?.title ?? chatSelection.threadId}
+              {SEEDED_THREADS.find((thread) => thread.id === activeThreadId)
+                ?.title ?? activeThreadId}
             </div>
-            <div>Anchor createdAt: {chatSelection.anchorCreatedAt}</div>
+            <div>Anchor createdAt: {anchorCreatedAt}</div>
             <div>Fetch count: {fetchCount}</div>
             <div>
               Expected stable counts:{" "}
@@ -995,11 +1001,11 @@ function App() {
           >
             {error}
           </pre>
-        ) : collection && chatSelection.anchorCreatedAt != null ? (
+        ) : collection && anchorCreatedAt != null ? (
           <MessagesHistoryPanel
             collection={collection}
-            threadId={chatSelection.threadId}
-            anchorCreatedAt={chatSelection.anchorCreatedAt}
+            threadId={activeThreadId}
+            anchorCreatedAt={anchorCreatedAt}
           />
         ) : (
           <MessagesPanelFrame
