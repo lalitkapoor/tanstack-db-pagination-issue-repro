@@ -147,3 +147,7 @@ body {
     @apply font-sans;
   }
 }
+
+.streamdown-content > :first-child {
+  margin-top: 0;
+}

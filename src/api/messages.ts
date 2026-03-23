@@ -27,6 +27,7 @@ export type BaseThreadMessage = {
 export type StandardThreadMessage = BaseThreadMessage & {
   role: Exclude<MessageRole, "error">
   text: string
+  chunks?: MessageChunk[]
   queued?: boolean
 }
 
@@ -309,6 +310,7 @@ function parseNormalizedThreadMessage(message: unknown): ThreadMessage | null {
     traceId: asOptionalString(message.traceId),
     inferenceId: asOptionalString(message.inferenceId),
   }
+  const chunks = parseMessageContent(message.chunks)
 
   switch (role) {
     case "agent":
@@ -319,6 +321,7 @@ function parseNormalizedThreadMessage(message: unknown): ThreadMessage | null {
       return {
         ...baseMessage,
         role,
+        chunks: chunks ?? undefined,
         queued: message.queued === true ? true : undefined,
       }
     case "error": {
@@ -445,6 +448,7 @@ export function normalizeThreadMessage(
     threadId,
     role: chunkedMessage.role,
     text: flattenMessageContent(chunkedMessage.content),
+    chunks: chunkedMessage.content,
     createdAt: chunkedMessage.createdAt,
     status: chunkedMessage.status,
     traceId: chunkedMessage.traceId,

@@ -12,6 +12,7 @@ import type { QueryClient } from "@tanstack/react-query"
 import type { Api } from "../../api"
 import type {
   ChatResponseStreamEvent,
+  MessageChunk,
   MessageRole,
   MessageStatus,
   ThreadMessage,
@@ -23,6 +24,7 @@ type Message = {
   threadId: string
   role: MessageRole
   content: string
+  chunks?: MessageChunk[]
   createdAt: number
   status?: MessageStatus
   queued?: boolean
@@ -82,6 +84,7 @@ export class MessagesStore {
           ...baseRow,
           role: message.role,
           content: message.text,
+          chunks: message.chunks,
           queued: message.queued,
         }
       case "error":
