@@ -20,7 +20,7 @@ export function ComposerPanel(props: {
             props.onSend()
           }
         }}
-        className="min-h-28"
+        className="min-h-28 px-4 py-3 text-base leading-7 md:text-base"
       />
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
