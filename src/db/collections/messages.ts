@@ -362,6 +362,7 @@ export class MessagesStore {
       queryFn: (ctx) => this.fetchMessages(ctx.meta?.loadSubsetOptions ?? {}),
       queryClient: this.queryClient,
       getKey: (message) => message.id,
+      persistedGcTime: Number.POSITIVE_INFINITY,
     })
 
     return createCollection(

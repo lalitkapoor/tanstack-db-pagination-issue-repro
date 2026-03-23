@@ -30,6 +30,7 @@ export class RecentsStore {
       queryFn: () => this.fetchRecents(),
       queryClient: this.queryClient,
       getKey: (item: SidebarHomePageItem) => item.id,
+      persistedGcTime: Number.POSITIVE_INFINITY,
     })
 
     return createCollection(
