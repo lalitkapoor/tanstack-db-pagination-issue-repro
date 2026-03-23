@@ -27,6 +27,12 @@ This branch is meant to show three separate things:
 2. the narrow app fix
 3. that the narrow fix does not heal already-corrupted persisted local state
 
+It now has two versions of that experiment:
+
+1. the original pair without `persistedGcTime`
+2. a second pair with `persistedGcTime: Number.POSITIVE_INFINITY` added to all
+   query-backed persisted collections on this branch
+
 The app bug is:
 
 - the selected thread id is updated first
@@ -49,10 +55,15 @@ Once that bad query has been mounted and persisted, switching back to the fixed 
   - intentionally broken version
 - `a6530f2` `Restore atomic thread selection in v2 minimal app`
   - narrow app fix
+- `f6bb31f` `Retain query state and reintroduce delayed anchor bug`
+  - same delayed-anchor bug, but with `persistedGcTime: Number.POSITIVE_INFINITY`
+    on `messages` and `threads`
+- `7eb1bdd` `Restore atomic thread selection on retained query state`
+  - narrow app fix on top of the `persistedGcTime: Infinity` setup
 
 The branch `HEAD` is currently:
 
-- `a6530f2`
+- `7eb1bdd`
 
 So the default branch state is the fixed version.
 
@@ -113,6 +124,19 @@ Thread 2:
 ## Reproduce the bug from scratch
 
 This is the exact flow that matches the stronger `v3` behavior.
+
+There are two ways to run it:
+
+1. original pair:
+   - buggy: `c9ae9db`
+   - fixed: `a6530f2`
+2. `persistedGcTime` set to `Infinity` pair:
+   - buggy: `f6bb31f`
+   - fixed: `7eb1bdd`
+
+The steps below are identical for both pairs.
+
+## Test path A: original pair
 
 ### 1. Move to the intentionally broken commit
 
@@ -196,6 +220,80 @@ That is the one-to-one reproduction:
 1. broken commit creates bad persisted state
 2. fixed commit does not heal it
 3. resetting local persistence does heal it
+
+## Test path B: `persistedGcTime` set to `Infinity`
+
+This path repeats the same test, but now `messages` and `threads` both set:
+
+```ts
+persistedGcTime: Number.POSITIVE_INFINITY
+```
+
+### 1. Move to the intentionally broken `persistedGcTime: Infinity` commit
+
+```bash
+git checkout f6bb31f
+```
+
+Reload the page.
+
+If you want a completely clean starting point, click:
+
+- `Reset local persistence`
+
+### 2. Create the bad persisted state
+
+Switch threads in this order:
+
+1. `Create additional paragraphs`
+2. `Casual greeting`
+3. `Create additional paragraphs`
+4. `Casual greeting`
+5. `Create additional paragraphs`
+
+Expected broken sequence:
+
+- second thread -> `6 loaded`
+- first thread -> `25 loaded`
+- second thread -> `0 loaded`
+- first thread -> `1 loaded`
+
+After that point:
+
+- first thread stays at `1 loaded`
+- second thread stays at `0 loaded`
+
+### 3. Move to the fixed `persistedGcTime: Infinity` commit without resetting local persistence
+
+```bash
+git checkout 7eb1bdd
+```
+
+Reload the same browser tab.
+
+Do **not** click `Reset local persistence`.
+
+This is the comparison that matters for the `persistedGcTime: Infinity` experiment:
+
+- if the app immediately returns to stable `25 / 6`, then the
+  `persistedGcTime: Infinity` setup is behaving differently from the original pair
+- if it stays wrong at `1 / 0`, then this is the same “fix does not heal stale
+  SQLite state” pattern as before
+
+### 4. Reset local persistence on the fixed `persistedGcTime: Infinity` commit
+
+Still on `7eb1bdd`, click:
+
+- `Reset local persistence`
+
+Then switch threads again.
+
+Expected healthy behavior:
+
+- second thread -> `6 loaded`
+- first thread -> `25 loaded`
+- second thread -> `6 loaded`
+- first thread -> `25 loaded`
 
 ## What the broken code is
 
