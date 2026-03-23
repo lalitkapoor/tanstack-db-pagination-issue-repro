@@ -297,9 +297,9 @@ async function removeDatabaseFiles(prefix: string) {
     // @ts-expect-error OPFS entries are not fully typed yet.
     for await (const [name] of root.entries()) {
       if ((name as string).includes(prefix)) {
-        await root.removeEntry(name as string, { recursive: true }).catch(
-          () => {},
-        )
+        await root
+          .removeEntry(name as string, { recursive: true })
+          .catch(() => {})
       }
     }
   } catch {
@@ -369,15 +369,18 @@ function createMessagesCollection(args: {
   })
 
   return createCollection(
-    persistedCollectionOptions<MessageRow, string, never, typeof queryOpts.utils>(
-      {
-        ...queryOpts,
-        persistence: createBrowserWASQLitePersistence<MessageRow, string>({
-          database: args.database,
-        }),
-        schemaVersion: 1,
-      },
-    ),
+    persistedCollectionOptions<
+      MessageRow,
+      string,
+      never,
+      typeof queryOpts.utils
+    >({
+      ...queryOpts,
+      persistence: createBrowserWASQLitePersistence<MessageRow, string>({
+        database: args.database,
+      }),
+      schemaVersion: 1,
+    }),
   )
 }
 
@@ -562,7 +565,10 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
       q
         .from({ message: collection })
         .where(({ message }) =>
-          and(eq(message.threadId, threadId), gt(message.createdAt, anchorCreatedAt)),
+          and(
+            eq(message.threadId, threadId),
+            gt(message.createdAt, anchorCreatedAt),
+          ),
         )
         .orderBy(({ message }) => message.createdAt, "asc")
         .orderBy(({ message }) => message.id, "asc"),
@@ -574,8 +580,9 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
       [...historyMessages, ...liveMessages]
         .filter(
           (message, index, allMessages) =>
-            allMessages.findIndex((candidate) => candidate.id === message.id) ===
-            index,
+            allMessages.findIndex(
+              (candidate) => candidate.id === message.id,
+            ) === index,
         )
         .sort(
           (left, right) =>
@@ -606,7 +613,8 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
     isLiveReady &&
     !isLoadingSubset &&
     hasResolvedInitialTranscript
-  const [showTranscriptContent, setShowTranscriptContent] = React.useState(false)
+  const [showTranscriptContent, setShowTranscriptContent] =
+    React.useState(false)
 
   useMessageQueryLabLogger({
     threadId,
@@ -661,7 +669,9 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
       controls={
         <MessagesPanelControls
           loadedLabel={
-            areTranscriptControlsReady ? `${sortedMessages.length} loaded` : "0 loaded"
+            areTranscriptControlsReady
+              ? `${sortedMessages.length} loaded`
+              : "0 loaded"
           }
           buttonLabel={
             areTranscriptControlsReady
@@ -698,7 +708,9 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
             }}
           >
             {sortedMessages.length === 0 ? (
-              <div style={{ color: "#666" }}>No messages loaded for this thread.</div>
+              <div style={{ color: "#666" }}>
+                No messages loaded for this thread.
+              </div>
             ) : (
               sortedMessages.map((message) => (
                 <article
@@ -727,7 +739,11 @@ const MessagesHistoryPanel = React.memo(function MessagesHistoryPanel(props: {
                     <span>{formatTimestamp(message.createdAt)}</span>
                   </div>
                   <div
-                    style={{ marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.5 }}
+                    style={{
+                      marginTop: 6,
+                      whiteSpace: "pre-wrap",
+                      lineHeight: 1.5,
+                    }}
                   >
                     {message.content}
                   </div>
@@ -775,9 +791,8 @@ function App() {
   const [collection, setCollection] = React.useState<ReturnType<
     typeof createMessagesCollection
   > | null>(null)
-  const [database, setDatabase] = React.useState<BrowserWASQLiteDatabase | null>(
-    null,
-  )
+  const [database, setDatabase] =
+    React.useState<BrowserWASQLiteDatabase | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -815,12 +830,15 @@ function App() {
             })
           })
           messagesCollection.on("loadingSubset:change", (event) => {
-            console.info(`${LAB_DEBUG_LABEL}[collection] loadingSubset:change`, {
-              isLoadingSubset: event.isLoadingSubset,
-              previousIsLoadingSubset: event.previousIsLoadingSubset,
-              transition: event.loadingSubsetTransition,
-              size: messagesCollection?.size ?? null,
-            })
+            console.info(
+              `${LAB_DEBUG_LABEL}[collection] loadingSubset:change`,
+              {
+                isLoadingSubset: event.isLoadingSubset,
+                previousIsLoadingSubset: event.previousIsLoadingSubset,
+                transition: event.loadingSubsetTransition,
+                size: messagesCollection?.size ?? null,
+              },
+            )
           })
         }
 
@@ -831,7 +849,9 @@ function App() {
       } catch (caughtError) {
         if (!isCancelled) {
           setError(
-            caughtError instanceof Error ? caughtError.message : String(caughtError),
+            caughtError instanceof Error
+              ? caughtError.message
+              : String(caughtError),
           )
         }
       }
@@ -969,14 +989,17 @@ function App() {
           <div style={{ display: "grid", gap: 4, fontSize: 13, color: "#666" }}>
             <div>
               Active thread:{" "}
-              {SEEDED_THREADS.find((thread) => thread.id === chatSelection.threadId)
-                ?.title ?? chatSelection.threadId}
+              {SEEDED_THREADS.find(
+                (thread) => thread.id === chatSelection.threadId,
+              )?.title ?? chatSelection.threadId}
             </div>
             <div>Anchor createdAt: {chatSelection.anchorCreatedAt}</div>
             <div>Fetch count: {fetchCount}</div>
             <div>
               Expected stable counts:{" "}
-              {SEEDED_THREADS.map((thread) => `${thread.title}=${thread.expectedCount}`).join(", ")}
+              {SEEDED_THREADS.map(
+                (thread) => `${thread.title}=${thread.expectedCount}`,
+              ).join(", ")}
             </div>
           </div>
         </section>
