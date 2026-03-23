@@ -48,17 +48,6 @@ export function ChatsMainContent(props: {
     }
   }, [props.messageAnchorCreatedAt, props.selectedThreadId])
 
-  useEffect(() => {
-    if (loadedThreads.length === 0 || props.selectedThreadId) {
-      return
-    }
-
-    const nextThreadId = loadedThreads[0]?.id
-    if (nextThreadId) {
-      props.onSelectThread(nextThreadId)
-    }
-  }, [loadedThreads, props.onSelectThread, props.selectedThreadId])
-
   const handleSend = () => {
     const content = messageInput.trim()
     if (!content || !props.selectedThreadId) {

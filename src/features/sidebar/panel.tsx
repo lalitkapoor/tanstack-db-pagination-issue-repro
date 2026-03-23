@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useState } from "react"
 import { useLiveInfiniteQuery, useLiveQuery } from "@tanstack/react-db"
 import { MessageCircle, Plus } from "lucide-react"
 import { useAppRuntime } from "~/app-runtime"
@@ -66,6 +66,26 @@ export function SidebarPanel(props: {
     props.onActiveTabChange("chat")
     props.onSelectThread(threadId)
   }
+
+  useLayoutEffect(() => {
+    if (
+      props.activeTab !== "chat" ||
+      props.selectedThreadId ||
+      loadedThreads.length === 0
+    ) {
+      return
+    }
+
+    const nextThreadId = loadedThreads[0]?.id
+    if (nextThreadId) {
+      props.onSelectThread(nextThreadId)
+    }
+  }, [
+    loadedThreads,
+    props.activeTab,
+    props.onSelectThread,
+    props.selectedThreadId,
+  ])
 
   return (
     <Card
