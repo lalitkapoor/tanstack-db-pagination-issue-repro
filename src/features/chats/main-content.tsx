@@ -6,7 +6,6 @@ import { ComposerPanel } from "./messages/composer-panel"
 import { SelectedThreadShell } from "./threads/selected-thread-shell"
 
 export function ChatsMainContent(props: {
-  header?: ReactNode
   selectedThreadId: string | null
   messageAnchorCreatedAt: number | null
   onSelectThread: (threadId: string) => void
@@ -71,15 +70,14 @@ export function ChatsMainContent(props: {
   }
 
   return (
-    <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)_auto]">
-      {props.header}
+    <div className="grid min-h-0 gap-3 lg:grid-rows-[minmax(0,1fr)_auto]">
       <SelectedThreadShell
         selectedThreadId={props.selectedThreadId}
         selectedThread={selectedThread}
         messageAnchorCreatedAt={props.messageAnchorCreatedAt}
         messages={messages}
       />
-      <div>
+      <div className="mx-auto w-full max-w-4xl">
         <ComposerPanel
           selectedThreadId={props.selectedThreadId}
           messageInput={messageInput}

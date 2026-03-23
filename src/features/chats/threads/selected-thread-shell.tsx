@@ -1,7 +1,6 @@
 import { Badge } from "~/components/ui/badge"
 import {
   Card,
-  CardAction,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -16,6 +15,8 @@ type ThreadRecord = {
   updatedAt: number
 }
 
+const CHAT_COLUMN_CLASS = "mx-auto w-full max-w-4xl"
+
 export function SelectedThreadShell(props: {
   selectedThreadId: string | null
   selectedThread?: ThreadRecord
@@ -23,38 +24,24 @@ export function SelectedThreadShell(props: {
   messages?: MessagesCollection
 }) {
   return (
-    <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
-      <Card className="border border-border/60 shadow-none" size="sm">
-        <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CardTitle>
-                {props.selectedThread?.title ?? "Unknown thread"}
-              </CardTitle>
-              <Badge variant="outline">local detail</Badge>
-            </div>
+    <div className={`grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)] ${CHAT_COLUMN_CLASS}`}>
+      <div className="border-b border-border/60 pb-3">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>
+              {props.selectedThread?.title ?? "Unknown thread"}
+            </CardTitle>
+            <Badge variant="outline">local detail</Badge>
+          </div>
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
             <CardDescription>
               {props.selectedThread
                 ? `Last updated ${formatTimestamp(props.selectedThread.updatedAt)}.`
                 : `No thread was found for ${props.selectedThreadId}.`}
             </CardDescription>
           </div>
-          <CardAction className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-              <div className="text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
-                Current route
-              </div>
-              <div className="font-mono text-[0.7rem] text-muted-foreground">
-                <span className="truncate">/api/applecart/threads/</span>
-                <span className="truncate">
-                  {props.selectedThreadId ?? "select-a-thread"}
-                </span>
-                <span className="truncate">/messages</span>
-              </div>
-            </div>
-          </CardAction>
-        </CardHeader>
-      </Card>
+        </div>
+      </div>
 
       {props.selectedThreadId &&
       props.messageAnchorCreatedAt != null &&

@@ -6,7 +6,6 @@ import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
   Card,
-  CardAction,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -15,6 +14,7 @@ import { resetDatabase, type AppRuntime } from "~/db"
 import { ChatsMainContent, HomeMainContent } from "~/features/chats/main-content"
 import { SidebarPanel } from "~/features/sidebar/panel"
 import type { SidebarTab } from "~/features/sidebar/types"
+import { formatTimestamp } from "~/lib/format-timestamp"
 
 function FetchCountValue(props: { runtime: AppRuntime }) {
   const [displayFetchCount, setDisplayFetchCount] = useState(
@@ -64,7 +64,7 @@ export function App() {
 
   return (
     <AppFrame>
-      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[24rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[24rem_minmax(0,1fr)_18rem]">
         <div className="min-h-0 overflow-hidden">
           <SidebarPanel
             activeTab={activeSidebarTab}
@@ -75,12 +75,6 @@ export function App() {
         </div>
         {activeSidebarTab === "chat" ? (
           <ChatsMainContent
-            header={
-              <AppHeader
-                fetchCount={<FetchCountValue runtime={runtime} />}
-                onReset={() => resetDatabase()}
-              />
-            }
             selectedThreadId={selectedThreadId}
             messageAnchorCreatedAt={chatSelection.messageAnchorCreatedAt}
             onSelectThread={handleSelectThread}
@@ -88,26 +82,26 @@ export function App() {
         ) : (
           <HomeMainContent
             header={
-              <AppHeader
-                fetchCount={<FetchCountValue runtime={runtime} />}
-                onReset={() => resetDatabase()}
-              />
+              <AppHero />
             }
           />
         )}
+        <DebugPanel
+          activeSidebarTab={activeSidebarTab}
+          selectedThreadId={selectedThreadId}
+          messageAnchorCreatedAt={chatSelection.messageAnchorCreatedAt}
+          fetchCount={<FetchCountValue runtime={runtime} />}
+          onReset={() => resetDatabase()}
+        />
       </div>
     </AppFrame>
   )
 }
 
-function AppHeader(props: {
-  fetchCount: React.ReactNode
-  onReset: () => void
-  resetDisabled?: boolean
-}) {
+function AppHero() {
   return (
     <Card className="border border-border/60 shadow-none">
-      <CardHeader className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+      <CardHeader>
         <div className="space-y-1">
           <Badge variant="outline" className="w-fit">
             TanStack DB Testbed
@@ -118,24 +112,99 @@ function AppHeader(props: {
             fetches, and nested thread-scoped message routes.
           </CardDescription>
         </div>
-        <CardAction className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="h-7 px-2.5 text-[0.625rem] tabular-nums"
-          >
-            <span>fetches </span>
-            {props.fetchCount}
-          </Badge>
-          <Button
-            variant="outline"
-            onClick={props.onReset}
-            disabled={props.resetDisabled}
-          >
-            <RefreshCcw />
-            Reset SQLite
-          </Button>
-        </CardAction>
       </CardHeader>
     </Card>
+  )
+}
+
+function DebugPanel(props: {
+  activeSidebarTab: SidebarTab
+  selectedThreadId: string | null
+  messageAnchorCreatedAt: number | null
+  fetchCount: React.ReactNode
+  onReset: () => void
+  resetDisabled?: boolean
+}) {
+  const currentRoute =
+    props.activeSidebarTab === "chat" && props.selectedThreadId
+      ? `/api/applecart/threads/${props.selectedThreadId}/messages`
+      : "/api/applecart/threads/:threadId/messages"
+
+  return (
+    <div className="hidden min-h-0 xl:block">
+      <Card className="sticky top-0 border border-border/60 shadow-none" size="sm">
+        <CardHeader className="gap-4">
+          <div className="space-y-1">
+            <Badge variant="outline" className="w-fit">
+              TanStack DB Testbed
+            </Badge>
+            <CardTitle className="text-base">Debug panel</CardTitle>
+            <CardDescription>
+              Current repro state and local persistence controls.
+            </CardDescription>
+          </div>
+          <div className="grid gap-2">
+            <Badge
+              variant="secondary"
+              className="h-7 w-fit px-2.5 text-[0.625rem] tabular-nums"
+            >
+              <span>fetches </span>
+              {props.fetchCount}
+            </Badge>
+            <Button
+              variant="outline"
+              onClick={props.onReset}
+              disabled={props.resetDisabled}
+            >
+              <RefreshCcw />
+              Reset SQLite
+            </Button>
+          </div>
+          <div className="grid gap-3 text-xs/relaxed">
+            <DebugField
+              label="Sidebar tab"
+              value={props.activeSidebarTab}
+            />
+            <DebugField
+              label="Selected thread"
+              value={props.selectedThreadId ?? "none"}
+              mono
+            />
+            <DebugField
+              label="Opened at"
+              value={
+                props.messageAnchorCreatedAt == null
+                  ? "none"
+                  : formatTimestamp(props.messageAnchorCreatedAt)
+              }
+            />
+            <DebugField label="Current route" value={currentRoute} mono />
+          </div>
+        </CardHeader>
+      </Card>
+    </div>
+  )
+}
+
+function DebugField(props: {
+  label: string
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
+        {props.label}
+      </div>
+      <div
+        className={
+          props.mono
+            ? "break-all font-mono text-[0.7rem] text-muted-foreground"
+            : "text-foreground"
+        }
+      >
+        {props.value}
+      </div>
+    </div>
   )
 }
