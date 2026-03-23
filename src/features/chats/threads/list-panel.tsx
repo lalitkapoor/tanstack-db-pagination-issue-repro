@@ -10,7 +10,14 @@ type ThreadRecord = {
   updatedAt: number
 }
 
-export function ListPanel(props: {
+export function ListPanel({
+  threads,
+  selectedThreadId,
+  hasMoreThreads,
+  isFetchingMoreThreads,
+  onSelectThread,
+  onLoadOlderThreads,
+}: {
   threads: ThreadRecord[]
   selectedThreadId: string | null
   hasMoreThreads: boolean
@@ -26,7 +33,7 @@ export function ListPanel(props: {
       <CardHeader>
         <CardTitle>Threads</CardTitle>
         <CardAction>
-          <Badge variant="secondary">{props.threads.length} loaded</Badge>
+          <Badge variant="secondary">{threads.length} loaded</Badge>
         </CardAction>
         <CardDescription>
           Loaded from `listThreads` and ordered by `updatedAt`.
@@ -34,13 +41,13 @@ export function ListPanel(props: {
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2">
         <div className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
-          {props.threads.map((thread) => {
-            const isSelected = thread.id === props.selectedThreadId
+          {threads.map((thread) => {
+            const isSelected = thread.id === selectedThreadId
             return (
               <button
                 key={thread.id}
                 type="button"
-                onClick={() => props.onSelectThread(thread.id)}
+                onClick={() => onSelectThread(thread.id)}
                 className={[
                   "w-full rounded-md border px-3 py-2 text-left transition-colors",
                   isSelected
@@ -68,11 +75,11 @@ export function ListPanel(props: {
         <Button
           variant="outline"
           className="w-full"
-          onClick={props.onLoadOlderThreads}
-          disabled={!props.hasMoreThreads || props.isFetchingMoreThreads}
+          onClick={onLoadOlderThreads}
+          disabled={!hasMoreThreads || isFetchingMoreThreads}
         >
           <ArrowDown />
-          {props.hasMoreThreads ? "Load older threads" : "No older threads"}
+          {hasMoreThreads ? "Load older threads" : "No older threads"}
         </Button>
       </CardContent>
     </Card>

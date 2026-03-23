@@ -4,7 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Input } from "~/components/ui/input"
 import { SEEDED_THREAD_ID } from "~/shared/seed"
 
-export function ControlsPanel(props: {
+export function ControlsPanel({
+  newThreadTitle,
+  threadLookupId,
+  onNewThreadTitleChange,
+  onThreadLookupIdChange,
+  onCreateThread,
+  onLoadThreadById,
+  disabled,
+}: {
   newThreadTitle: string
   threadLookupId: string
   onNewThreadTitleChange: (value: string) => void
@@ -30,16 +38,16 @@ export function ControlsPanel(props: {
           <div className="flex gap-2">
             <Input
               placeholder="Quarterly planning"
-              value={props.newThreadTitle}
-              disabled={props.disabled}
-              onChange={(event) => props.onNewThreadTitleChange(event.target.value)}
+              value={newThreadTitle}
+              disabled={disabled}
+              onChange={(event) => onNewThreadTitleChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  props.onCreateThread()
+                  onCreateThread()
                 }
               }}
             />
-            <Button size="icon" onClick={props.onCreateThread} disabled={props.disabled}>
+            <Button size="icon" onClick={onCreateThread} disabled={disabled}>
               <Plus />
             </Button>
           </div>
@@ -57,20 +65,20 @@ export function ControlsPanel(props: {
           <div className="flex gap-2">
             <Input
               placeholder={SEEDED_THREAD_ID}
-              value={props.threadLookupId}
-              disabled={props.disabled}
-              onChange={(event) => props.onThreadLookupIdChange(event.target.value)}
+              value={threadLookupId}
+              disabled={disabled}
+              onChange={(event) => onThreadLookupIdChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  props.onLoadThreadById()
+                  onLoadThreadById()
                 }
               }}
             />
             <Button
               variant="outline"
               size="icon"
-              onClick={props.onLoadThreadById}
-              disabled={props.disabled}
+              onClick={onLoadThreadById}
+              disabled={disabled}
             >
               <Search />
             </Button>

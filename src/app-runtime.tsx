@@ -3,14 +3,15 @@ import type { AppRuntime } from "~/db"
 
 const AppRuntimeContext = createContext<AppRuntime | null>(null)
 
-export function AppRuntimeProvider(props: {
+export function AppRuntimeProvider({
+  runtime,
+  children,
+}: {
   runtime: AppRuntime
   children: ReactNode
 }) {
   return (
-    <AppRuntimeContext.Provider value={props.runtime}>
-      {props.children}
-    </AppRuntimeContext.Provider>
+    <AppRuntimeContext.Provider value={runtime}>{children}</AppRuntimeContext.Provider>
   )
 }
 

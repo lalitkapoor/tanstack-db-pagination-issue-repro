@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { RefreshCcw } from "lucide-react"
 import { useAppRuntime } from "~/app-runtime"
 import { AppFrame } from "~/app-frame"
@@ -16,17 +16,17 @@ import { SidebarPanel } from "~/features/sidebar/panel"
 import type { SidebarTab } from "~/features/sidebar/types"
 import { formatTimestamp } from "~/lib/format-timestamp"
 
-function FetchCountValue(props: { runtime: AppRuntime }) {
+function FetchCountValue({ runtime }: { runtime: AppRuntime }) {
   const [displayFetchCount, setDisplayFetchCount] = useState(
-    props.runtime.data.stores.messages.fetchCount,
+    runtime.data.stores.messages.fetchCount,
   )
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDisplayFetchCount(props.runtime.data.stores.messages.fetchCount)
+      setDisplayFetchCount(runtime.data.stores.messages.fetchCount)
     }, 500)
     return () => clearInterval(interval)
-  }, [props.runtime])
+  }, [runtime])
 
   return (
     <span className="inline-block min-w-[4ch] text-right tabular-nums">
@@ -77,7 +77,6 @@ export function App() {
           <ChatsMainContent
             selectedThreadId={selectedThreadId}
             messageAnchorCreatedAt={chatSelection.messageAnchorCreatedAt}
-            onSelectThread={handleSelectThread}
           />
         ) : (
           <HomeMainContent
@@ -117,17 +116,24 @@ function AppHero() {
   )
 }
 
-function DebugPanel(props: {
+function DebugPanel({
+  activeSidebarTab,
+  selectedThreadId,
+  messageAnchorCreatedAt,
+  fetchCount,
+  onReset,
+  resetDisabled,
+}: {
   activeSidebarTab: SidebarTab
   selectedThreadId: string | null
   messageAnchorCreatedAt: number | null
-  fetchCount: React.ReactNode
+  fetchCount: ReactNode
   onReset: () => void
   resetDisabled?: boolean
 }) {
   const currentRoute =
-    props.activeSidebarTab === "chat" && props.selectedThreadId
-      ? `/api/applecart/threads/${props.selectedThreadId}/messages`
+    activeSidebarTab === "chat" && selectedThreadId
+      ? `/api/applecart/threads/${selectedThreadId}/messages`
       : "/api/applecart/threads/:threadId/messages"
 
   return (
@@ -149,12 +155,12 @@ function DebugPanel(props: {
               className="h-7 w-fit px-2.5 text-[0.625rem] tabular-nums"
             >
               <span>fetches </span>
-              {props.fetchCount}
+              {fetchCount}
             </Badge>
             <Button
               variant="outline"
-              onClick={props.onReset}
-              disabled={props.resetDisabled}
+              onClick={onReset}
+              disabled={resetDisabled}
             >
               <RefreshCcw />
               Reset SQLite
@@ -163,19 +169,19 @@ function DebugPanel(props: {
           <div className="grid gap-3 text-xs/relaxed">
             <DebugField
               label="Sidebar tab"
-              value={props.activeSidebarTab}
+              value={activeSidebarTab}
             />
             <DebugField
               label="Selected thread"
-              value={props.selectedThreadId ?? "none"}
+              value={selectedThreadId ?? "none"}
               mono
             />
             <DebugField
               label="Opened at"
               value={
-                props.messageAnchorCreatedAt == null
+                messageAnchorCreatedAt == null
                   ? "none"
-                  : formatTimestamp(props.messageAnchorCreatedAt)
+                  : formatTimestamp(messageAnchorCreatedAt)
               }
             />
             <DebugField label="Current route" value={currentRoute} mono />
@@ -186,7 +192,7 @@ function DebugPanel(props: {
   )
 }
 
-function DebugField(props: {
+function DebugField({ label, value, mono }: {
   label: string
   value: string
   mono?: boolean
@@ -194,16 +200,16 @@ function DebugField(props: {
   return (
     <div className="space-y-1">
       <div className="text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
-        {props.label}
+        {label}
       </div>
       <div
         className={
-          props.mono
+          mono
             ? "break-all font-mono text-[0.7rem] text-muted-foreground"
             : "text-foreground"
         }
       >
-        {props.value}
+        {value}
       </div>
     </div>
   )

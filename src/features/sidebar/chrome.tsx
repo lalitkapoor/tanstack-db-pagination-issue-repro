@@ -3,7 +3,11 @@ import { CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { cn } from "~/lib/utils"
 import type { SidebarTab } from "./types"
 
-export function SidebarChrome(props: {
+export function SidebarChrome({
+  activeTab,
+  description,
+  onActiveTabChange,
+}: {
   activeTab: SidebarTab
   description?: string
   onActiveTabChange?: (tab: SidebarTab) => void
@@ -15,17 +19,17 @@ export function SidebarChrome(props: {
         <div className="flex items-center gap-1 text-muted-foreground">
           <SidebarNavIcon
             icon={Home}
-            active={props.activeTab === "home"}
+            active={activeTab === "home"}
             onClick={
-              props.onActiveTabChange ? () => props.onActiveTabChange?.("home") : undefined
+              onActiveTabChange ? () => onActiveTabChange?.("home") : undefined
             }
           />
           <SidebarPill
             icon={MessageCircle}
             label="Chat"
-            active={props.activeTab === "chat"}
+            active={activeTab === "chat"}
             onClick={
-              props.onActiveTabChange ? () => props.onActiveTabChange?.("chat") : undefined
+              onActiveTabChange ? () => onActiveTabChange?.("chat") : undefined
             }
           />
           <SidebarNavIcon icon={Search} />
@@ -34,7 +38,7 @@ export function SidebarChrome(props: {
       </div>
       <div className="space-y-1">
         <CardTitle className="flex items-center gap-2 text-base">
-          {props.activeTab === "home" ? (
+          {activeTab === "home" ? (
             <>
               <Home className="size-4" />
               Home
@@ -46,58 +50,54 @@ export function SidebarChrome(props: {
             </>
           )}
         </CardTitle>
-        {props.description ? <CardDescription>{props.description}</CardDescription> : null}
+        {description ? <CardDescription>{description}</CardDescription> : null}
       </div>
     </CardHeader>
   )
 }
 
-function SidebarNavIcon(props: {
+function SidebarNavIcon({ icon: Icon, active, onClick }: {
   icon: LucideIcon
   active?: boolean
   onClick?: () => void
 }) {
-  const Icon = props.icon
-
   return (
     <button
       type="button"
-      onClick={props.onClick}
+      onClick={onClick}
       className={cn(
         "flex size-8 items-center justify-center rounded-full transition-colors",
-        props.active
+        active
           ? "bg-foreground/8 text-foreground"
           : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
-      aria-pressed={props.active}
+      aria-pressed={active}
     >
       <Icon className="size-4" />
     </button>
   )
 }
 
-function SidebarPill(props: {
+function SidebarPill({ icon: Icon, label, active, onClick }: {
   icon: LucideIcon
   label: string
   active?: boolean
   onClick?: () => void
 }) {
-  const Icon = props.icon
-
   return (
     <button
       type="button"
-      onClick={props.onClick}
+      onClick={onClick}
       className={cn(
         "flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors",
-        props.active
+        active
           ? "border-blue-500/60 bg-blue-50 text-foreground"
           : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
-      aria-pressed={props.active}
+      aria-pressed={active}
     >
       <Icon className="size-4" />
-      <span>{props.label}</span>
+      <span>{label}</span>
     </button>
   )
 }

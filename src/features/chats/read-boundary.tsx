@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { useAppRuntime } from "~/app-runtime"
 
-export function ChatsReadBoundary(props: { children: ReactNode }) {
+export function ChatsReadBoundary({ children }: { children: ReactNode }) {
   const runtime = useAppRuntime()
   const [isReady, setIsReady] = useState(() => runtime.isDataReady())
 
@@ -33,5 +33,5 @@ export function ChatsReadBoundary(props: { children: ReactNode }) {
     return null
   }
 
-  return <>{props.children}</>
+  return <>{children}</>
 }

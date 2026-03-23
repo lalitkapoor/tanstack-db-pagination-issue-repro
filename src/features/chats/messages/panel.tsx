@@ -1,16 +1,20 @@
 import type { MessagesCollection } from "~/db/data/messages"
 import { TranscriptPanel } from "./transcript-panel"
 
-export function MessagesPanel(props: {
+export function MessagesPanel({
+  messages,
+  selectedThreadId,
+  messageAnchorCreatedAt,
+}: {
   messages: MessagesCollection
   selectedThreadId: string
   messageAnchorCreatedAt: number
 }) {
   return (
     <TranscriptPanel
-      messages={props.messages}
-      selectedThreadId={props.selectedThreadId}
-      messageAnchorCreatedAt={props.messageAnchorCreatedAt}
+      messages={messages}
+      selectedThreadId={selectedThreadId}
+      messageAnchorCreatedAt={messageAnchorCreatedAt}
     />
   )
 }

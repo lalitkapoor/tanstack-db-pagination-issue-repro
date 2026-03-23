@@ -11,7 +11,12 @@ import { FileText } from "lucide-react"
 import { SidebarChrome } from "./chrome"
 import type { SidebarTab } from "./types"
 
-export function SidebarPanel(props: {
+export function SidebarPanel({
+  activeTab,
+  selectedThreadId,
+  onActiveTabChange,
+  onSelectThread,
+}: {
   activeTab: SidebarTab
   selectedThreadId: string | null
   onActiveTabChange: (tab: SidebarTab) => void
@@ -58,19 +63,19 @@ export function SidebarPanel(props: {
 
   const handleCreateThread = () => {
     const threadId = stores.threads.add("New chat")
-    props.onActiveTabChange("chat")
-    props.onSelectThread(threadId)
+    onActiveTabChange("chat")
+    onSelectThread(threadId)
   }
 
   const handleSelectThread = (threadId: string) => {
-    props.onActiveTabChange("chat")
-    props.onSelectThread(threadId)
+    onActiveTabChange("chat")
+    onSelectThread(threadId)
   }
 
   useLayoutEffect(() => {
     if (
-      props.activeTab !== "chat" ||
-      props.selectedThreadId ||
+      activeTab !== "chat" ||
+      selectedThreadId ||
       loadedThreads.length === 0
     ) {
       return
@@ -78,13 +83,13 @@ export function SidebarPanel(props: {
 
     const nextThreadId = loadedThreads[0]?.id
     if (nextThreadId) {
-      props.onSelectThread(nextThreadId)
+      onSelectThread(nextThreadId)
     }
   }, [
+    activeTab,
     loadedThreads,
-    props.activeTab,
-    props.onSelectThread,
-    props.selectedThreadId,
+    onSelectThread,
+    selectedThreadId,
   ])
 
   return (
@@ -93,12 +98,12 @@ export function SidebarPanel(props: {
       size="sm"
     >
       <SidebarChrome
-        activeTab={props.activeTab}
-        onActiveTabChange={props.onActiveTabChange}
+        activeTab={activeTab}
+        onActiveTabChange={onActiveTabChange}
       />
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          {props.activeTab === "home" ? (
+          {activeTab === "home" ? (
             <>
               <div className="text-[0.7rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                 Teamspaces
@@ -125,7 +130,7 @@ export function SidebarPanel(props: {
           ) : (
             <ChatSection
               threads={loadedThreads}
-              selectedThreadId={props.selectedThreadId}
+              selectedThreadId={selectedThreadId}
               onSelectThread={handleSelectThread}
             />
           )}
@@ -151,7 +156,14 @@ export function SidebarPanel(props: {
   )
 }
 
-function SidebarSection(props: {
+function SidebarSection({
+  title,
+  items,
+  isLoading,
+  isReady,
+  errorMessage,
+  emptyMessage,
+}: {
   title: string
   items: SidebarHomePageItem[]
   isLoading: boolean
@@ -159,12 +171,12 @@ function SidebarSection(props: {
   errorMessage?: string
   emptyMessage: string
 }) {
-  const showLoadingState = useDelayedValue(props.isLoading, 300)
+  const showLoadingState = useDelayedValue(isLoading, 300)
 
   return (
     <section className="grid gap-2">
       <div className="px-1 text-[0.7rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-        {props.title}
+        {title}
       </div>
       {showLoadingState ? (
         <div className="grid gap-1">
@@ -175,17 +187,17 @@ function SidebarSection(props: {
             />
           ))}
         </div>
-      ) : !props.isReady ? null : props.errorMessage ? (
+      ) : !isReady ? null : errorMessage ? (
         <div className="rounded-md border border-dashed border-destructive/30 bg-background px-3 py-4 text-xs text-destructive">
-          {props.errorMessage}
+          {errorMessage}
         </div>
-      ) : props.items.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="rounded-md border border-dashed border-border/80 bg-background px-3 py-4 text-xs text-muted-foreground">
-          {props.emptyMessage}
+          {emptyMessage}
         </div>
       ) : (
         <div className="grid gap-1">
-          {props.items.map((item) => (
+          {items.map((item) => (
             <SidebarPageItem key={`${item.type}-${item.id}`} item={item} />
           ))}
         </div>
@@ -215,29 +227,33 @@ function useDelayedValue(value: boolean, delayMs: number) {
   return delayedValue
 }
 
-function SidebarPageItem(props: {
+function SidebarPageItem({ item }: {
   item: SidebarHomePageItem
 }) {
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-background/80">
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-        {props.item.icon ? (
-          <span className="text-sm leading-none">{props.item.icon}</span>
+        {item.icon ? (
+          <span className="text-sm leading-none">{item.icon}</span>
         ) : (
           <FileText className="size-3.5" />
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{props.item.title}</div>
+        <div className="truncate text-sm font-medium">{item.title}</div>
         <div className="text-[0.7rem] text-muted-foreground">
-          {formatTimestamp(props.item.updatedAt)}
+          {formatTimestamp(item.updatedAt)}
         </div>
       </div>
     </div>
   )
 }
 
-function ChatSection(props: {
+function ChatSection({
+  threads,
+  selectedThreadId,
+  onSelectThread,
+}: {
   threads: Array<{
     id: string
     title: string
@@ -251,20 +267,20 @@ function ChatSection(props: {
       <div className="px-1 text-[0.7rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
         Recent Threads
       </div>
-      {props.threads.length === 0 ? (
+      {threads.length === 0 ? (
         <div className="rounded-md border border-dashed border-border/80 bg-background px-3 py-4 text-xs text-muted-foreground">
           No threads are loaded yet.
         </div>
       ) : (
         <div className="grid gap-1">
-          {props.threads.map((thread) => (
+          {threads.map((thread) => (
             <button
               key={thread.id}
               type="button"
-              onClick={() => props.onSelectThread(thread.id)}
+              onClick={() => onSelectThread(thread.id)}
               className={cn(
                 "flex items-center gap-2 rounded-md px-2 py-2 text-left transition-colors",
-                thread.id === props.selectedThreadId
+                thread.id === selectedThreadId
                   ? "bg-foreground/8"
                   : "hover:bg-background/80",
               )}

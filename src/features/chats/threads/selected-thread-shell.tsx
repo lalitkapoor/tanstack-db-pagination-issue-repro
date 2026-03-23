@@ -17,7 +17,12 @@ type ThreadRecord = {
 
 const CHAT_COLUMN_CLASS = "mx-auto w-full max-w-4xl"
 
-export function SelectedThreadShell(props: {
+export function SelectedThreadShell({
+  selectedThreadId,
+  selectedThread,
+  messageAnchorCreatedAt,
+  messages,
+}: {
   selectedThreadId: string | null
   selectedThread?: ThreadRecord
   messageAnchorCreatedAt: number | null
@@ -29,28 +34,28 @@ export function SelectedThreadShell(props: {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>
-              {props.selectedThread?.title ?? "Unknown thread"}
+              {selectedThread?.title ?? "Unknown thread"}
             </CardTitle>
             <Badge variant="outline">local detail</Badge>
           </div>
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
             <CardDescription>
-              {props.selectedThread
-                ? `Last updated ${formatTimestamp(props.selectedThread.updatedAt)}.`
-                : `No thread was found for ${props.selectedThreadId}.`}
+              {selectedThread
+                ? `Last updated ${formatTimestamp(selectedThread.updatedAt)}.`
+                : `No thread was found for ${selectedThreadId}.`}
             </CardDescription>
           </div>
         </div>
       </div>
 
-      {props.selectedThreadId &&
-      props.messageAnchorCreatedAt != null &&
-      props.messages ? (
+      {selectedThreadId &&
+      messageAnchorCreatedAt != null &&
+      messages ? (
         <MessagesPanel
-          key={props.selectedThreadId}
-          messages={props.messages}
-          selectedThreadId={props.selectedThreadId}
-          messageAnchorCreatedAt={props.messageAnchorCreatedAt}
+          key={selectedThreadId}
+          messages={messages}
+          selectedThreadId={selectedThreadId}
+          messageAnchorCreatedAt={messageAnchorCreatedAt}
         />
       ) : (
         <Card className="min-h-0 border border-border/60 shadow-none">

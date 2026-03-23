@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { ComposerPanel } from "./messages/composer-panel"
 import { SelectedThreadShell } from "./threads/selected-thread-shell"
 
-export function ChatsMainContent(props: {
+export function ChatsMainContent({
+  selectedThreadId,
+  messageAnchorCreatedAt,
+}: {
   selectedThreadId: string | null
   messageAnchorCreatedAt: number | null
-  onSelectThread: (threadId: string) => void
 }) {
   const runtime = useAppRuntime()
   const threads = runtime.data.collections.threads
@@ -27,11 +29,11 @@ export function ChatsMainContent(props: {
 
   const selectedThread = useMemo(
     () =>
-      props.selectedThreadId
-        ? loadedThreads.find((thread) => thread.id === props.selectedThreadId) ??
-          threads.get(props.selectedThreadId)
+      selectedThreadId
+        ? loadedThreads.find((thread) => thread.id === selectedThreadId) ??
+          threads.get(selectedThreadId)
         : undefined,
-    [loadedThreads, props.selectedThreadId, threads],
+    [loadedThreads, selectedThreadId, threads],
   )
 
   useEffect(() => {
@@ -43,32 +45,32 @@ export function ChatsMainContent(props: {
         }
       }
     ).__appState = {
-      selectedThreadId: props.selectedThreadId,
-      messageAnchorCreatedAt: props.messageAnchorCreatedAt,
+      selectedThreadId,
+      messageAnchorCreatedAt,
     }
-  }, [props.messageAnchorCreatedAt, props.selectedThreadId])
+  }, [messageAnchorCreatedAt, selectedThreadId])
 
   const handleSend = () => {
     const content = messageInput.trim()
-    if (!content || !props.selectedThreadId) {
+    if (!content || !selectedThreadId) {
       return
     }
 
-    stores.messages.add(content, props.selectedThreadId)
+    stores.messages.add(content, selectedThreadId)
     setMessageInput("")
   }
 
   return (
     <div className="grid min-h-0 gap-3 lg:grid-rows-[minmax(0,1fr)_auto]">
-      <SelectedThreadShell
-        selectedThreadId={props.selectedThreadId}
+        <SelectedThreadShell
+        selectedThreadId={selectedThreadId}
         selectedThread={selectedThread}
-        messageAnchorCreatedAt={props.messageAnchorCreatedAt}
+        messageAnchorCreatedAt={messageAnchorCreatedAt}
         messages={messages}
       />
       <div className="mx-auto w-full max-w-4xl">
         <ComposerPanel
-          selectedThreadId={props.selectedThreadId}
+          selectedThreadId={selectedThreadId}
           messageInput={messageInput}
           onMessageInputChange={setMessageInput}
           onSend={handleSend}
@@ -78,12 +80,12 @@ export function ChatsMainContent(props: {
   )
 }
 
-export function HomeMainContent(props: {
+export function HomeMainContent({ header }: {
   header?: ReactNode
 }) {
   return (
     <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
-      {props.header}
+      {header}
       <Card className="min-h-0 border border-border/60 shadow-none">
         <CardHeader>
           <CardTitle>Home</CardTitle>

@@ -30,12 +30,15 @@ type RenderBlock =
 
 const TRANSCRIPT_COLUMN_CLASS = "mx-auto w-full max-w-4xl"
 
-export function TranscriptPanel(props: {
+export function TranscriptPanel({
+  messages,
+  selectedThreadId,
+  messageAnchorCreatedAt,
+}: {
   messages: MessagesCollection
   selectedThreadId: string
   messageAnchorCreatedAt: number
 }) {
-  const { messages, selectedThreadId, messageAnchorCreatedAt } = props
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevScrollHeightRef = useRef(0)
 
@@ -219,11 +222,9 @@ export function TranscriptPanel(props: {
   )
 }
 
-function TranscriptMessageBlock(props: {
+function TranscriptMessageBlock({ message }: {
   message: TranscriptMessage
 }) {
-  const { message } = props
-
   if (message.role === "user") {
     return (
       <div className="max-w-[85%]">
@@ -313,11 +314,11 @@ function renderAgentMessageContent(message: TranscriptMessage) {
   })
 }
 
-function TextChunkBlock(props: {
+function TextChunkBlock({ content, muted }: {
   content: string
   muted?: boolean
 }) {
-  const text = normalizeChatMarkdownInput(stripLangTag(props.content)).trim()
+  const text = normalizeChatMarkdownInput(stripLangTag(content)).trim()
 
   if (text.length === 0) {
     return null
@@ -329,7 +330,7 @@ function TextChunkBlock(props: {
       parseIncompleteMarkdown
       className={cn(
         "streamdown-content space-y-2 text-[15px] leading-7",
-        props.muted && "text-muted-foreground",
+        muted && "text-muted-foreground",
       )}
     >
       {text}
@@ -337,10 +338,10 @@ function TextChunkBlock(props: {
   )
 }
 
-function ToolGroupBlock(props: {
+function ToolGroupBlock({ messages }: {
   messages: TranscriptMessage[]
 }) {
-  const totalChunks = props.messages.reduce(
+  const totalChunks = messages.reduce(
     (count, message) => count + (message.chunks?.length ?? 0),
     0,
   )
@@ -351,7 +352,7 @@ function ToolGroupBlock(props: {
         Thinking ({totalChunks} tool {totalChunks === 1 ? "step" : "steps"})
       </summary>
       <div className="mt-2 flex flex-col gap-2">
-        {props.messages.map((message) =>
+        {messages.map((message) =>
           message.chunks?.map((chunk, chunkIndex) => {
             if (chunk.type === "toolRequest") {
               return (
@@ -389,31 +390,31 @@ function ToolGroupBlock(props: {
   )
 }
 
-function ToolChunkBlock(props: {
+function ToolChunkBlock({ title, content }: {
   title: string
   content: string
 }) {
   return (
     <details className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm/5">
       <summary className="cursor-pointer font-medium text-foreground select-none">
-        {props.title}
+        {title}
       </summary>
       <pre className="mt-2 max-h-72 overflow-auto font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-        {props.content}
+        {content}
       </pre>
     </details>
   )
 }
 
-function ToolResponseCard(props: {
+function ToolResponseCard({ title, content }: {
   title: string
   content: string
 }) {
   return (
     <div className="rounded-md border border-border bg-background px-3 py-2 text-sm/5">
-      <p className="font-medium text-foreground">{props.title}</p>
+      <p className="font-medium text-foreground">{title}</p>
       <pre className="mt-1 max-h-56 overflow-auto font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-        {props.content}
+        {content}
       </pre>
     </div>
   )

@@ -1,7 +1,13 @@
 import { Button } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
 
-export function ComposerPanel(props: {
+export function ComposerPanel({
+  selectedThreadId,
+  messageInput,
+  onMessageInputChange,
+  onSend,
+  disabled,
+}: {
   selectedThreadId: string | null
   messageInput: string
   onMessageInputChange: (value: string) => void
@@ -12,12 +18,12 @@ export function ComposerPanel(props: {
     <div className="grid gap-3 pt-1">
       <Textarea
         placeholder="Type a message to stream a real response for this thread..."
-        value={props.messageInput}
-        disabled={props.disabled}
-        onChange={(event) => props.onMessageInputChange(event.target.value)}
+        value={messageInput}
+        disabled={disabled}
+        onChange={(event) => onMessageInputChange(event.target.value)}
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-            props.onSend()
+            onSend()
           }
         }}
         className="min-h-28 px-4 py-3 text-base leading-7 md:text-base"
@@ -27,8 +33,8 @@ export function ComposerPanel(props: {
           Cmd/Ctrl + Enter sends the message.
         </div>
         <Button
-          onClick={props.onSend}
-          disabled={props.disabled || !props.selectedThreadId}
+          onClick={onSend}
+          disabled={disabled || !selectedThreadId}
         >
           Send message
         </Button>

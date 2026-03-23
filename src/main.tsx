@@ -1,4 +1,4 @@
-import React from "react"
+import { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AppFrame } from "./app-frame"
@@ -70,9 +70,9 @@ function BootSidebarPlaceholder() {
 }
 
 function useDelayedBootSidebarSkeleton(delayMs: number) {
-  const [showSkeleton, setShowSkeleton] = React.useState(false)
+  const [showSkeleton, setShowSkeleton] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setShowSkeleton(true)
     }, delayMs)
@@ -131,10 +131,10 @@ function BootHomePlaceholder() {
 }
 
 function Root() {
-  const [runtime, setRuntime] = React.useState<AppRuntime | null>(null)
-  const [error, setError] = React.useState<string | null>(null)
+  const [runtime, setRuntime] = useState<AppRuntime | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  React.useEffect(() => {
+  useEffect(() => {
     initAppRuntime(queryClient)
       .then((resolvedRuntime) => setRuntime(resolvedRuntime))
       .catch((err) => {
