@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/card"
 import { resetDatabase, type AppRuntime } from "~/db"
 import { ChatsMainContent, HomeMainContent } from "~/features/chats/main-content"
+import { useMessageStoreConnection } from "~/features/message-store/connection"
 import { SidebarPanel } from "~/features/sidebar/panel"
 import type { SidebarTab } from "~/features/sidebar/types"
 import { formatTimestamp } from "~/lib/format-timestamp"
@@ -37,6 +38,7 @@ function FetchCountValue({ runtime }: { runtime: AppRuntime }) {
 
 export function App() {
   const runtime = useAppRuntime()
+  const messageStore = useMessageStoreConnection()
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("home")
   const [chatSelection, setChatSelection] = useState<{
     threadId: string | null
@@ -89,6 +91,7 @@ export function App() {
           activeSidebarTab={activeSidebarTab}
           selectedThreadId={selectedThreadId}
           messageAnchorCreatedAt={chatSelection.messageAnchorCreatedAt}
+          messageStore={messageStore}
           fetchCount={<FetchCountValue runtime={runtime} />}
           onReset={() => resetDatabase()}
         />
@@ -120,6 +123,7 @@ function DebugPanel({
   activeSidebarTab,
   selectedThreadId,
   messageAnchorCreatedAt,
+  messageStore,
   fetchCount,
   onReset,
   resetDisabled,
@@ -127,6 +131,7 @@ function DebugPanel({
   activeSidebarTab: SidebarTab
   selectedThreadId: string | null
   messageAnchorCreatedAt: number | null
+  messageStore: ReturnType<typeof useMessageStoreConnection>
   fetchCount: ReactNode
   onReset: () => void
   resetDisabled?: boolean
@@ -167,6 +172,7 @@ function DebugPanel({
             </Button>
           </div>
           <div className="grid gap-3 text-xs/relaxed">
+            <DebugField label="Message Store" value={messageStore.status} />
             <DebugField
               label="Sidebar tab"
               value={activeSidebarTab}
@@ -185,6 +191,28 @@ function DebugPanel({
               }
             />
             <DebugField label="Current route" value={currentRoute} mono />
+            <DebugField
+              label="Message Store URL"
+              value={messageStore.connectionUrl || "connecting..."}
+              mono
+            />
+            <DebugField
+              label="Subscriptions"
+              value={String(messageStore.subscriptionKeys.length)}
+            />
+            <DebugField
+              label="Last event"
+              value={
+                messageStore.lastEventAt == null
+                  ? "none"
+                  : `${messageStore.lastMessageType ?? "unknown"} at ${formatTimestamp(messageStore.lastEventAt)}`
+              }
+            />
+            <DebugField
+              label="Last notification key"
+              value={messageStore.lastNotificationKey ?? "none"}
+              mono
+            />
           </div>
         </CardHeader>
       </Card>

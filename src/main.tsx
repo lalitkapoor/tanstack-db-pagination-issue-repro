@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "./components/ui/card"
+import { MessageStoreConnectionProvider } from "./features/message-store/connection"
 import { SidebarChrome } from "./features/sidebar/chrome"
 import { App } from "./App"
 import "./index.css"
@@ -154,7 +155,9 @@ function Root() {
         <AppBootShell />
       ) : (
         <AppRuntimeProvider runtime={runtime}>
-          <App />
+          <MessageStoreConnectionProvider>
+            <App />
+          </MessageStoreConnectionProvider>
         </AppRuntimeProvider>
       )}
     </QueryClientProvider>

@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/vite"
 import { resolve } from "node:path"
 import { readFileSync } from "node:fs"
 
+const messageStoreUrl =
+  process.env.NOTION_MESSAGE_STORE_URL ?? "http://localhost:3001"
+
 /**
  * Serves the wa-sqlite OPFS worker from node_modules.
  */
@@ -27,6 +30,11 @@ export default defineConfig({
     port: 11000,
     proxy: {
       "/api": "http://localhost:11001",
+      "/primus-v8": {
+        target: messageStoreUrl,
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   resolve: {

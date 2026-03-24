@@ -137,6 +137,65 @@ async function proxySidebarPayload(req: Request, type: "listFavorites" | "listRe
   })
 }
 
+async function proxySyncRecordValues(req: Request) {
+  const bearerToken = parseBearerToken(req)
+  if (!bearerToken) {
+    return Response.json(
+      { error: "Missing Authorization header" },
+      { status: 401, headers: corsHeaders },
+    )
+  }
+
+  let requestBody: unknown
+  try {
+    requestBody = await req.json()
+  } catch {
+    return Response.json(
+      { error: "Request body must be valid JSON" },
+      { status: 400, headers: corsHeaders },
+    )
+  }
+
+  const upstream = await fetch(getUpstreamUrl(), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      type: "syncRecordValues",
+      request: requestBody,
+    }),
+  })
+
+  const responseBody = await upstream.text()
+  if (!upstream.ok) {
+    return new Response(responseBody, {
+      status: upstream.status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+      },
+    })
+  }
+
+  let parsedResponse: unknown
+  try {
+    parsedResponse = JSON.parse(responseBody)
+  } catch {
+    return Response.json(
+      { error: "Upstream syncRecordValues response was not valid JSON" },
+      { status: 502, headers: corsHeaders },
+    )
+  }
+
+  return Response.json(
+    { data: parsedResponse },
+    { status: upstream.status, headers: corsHeaders },
+  )
+}
+
 async function proxyListThreadMessages(req: Request, threadId: string) {
   const bearerToken = parseBearerToken(req)
   if (!bearerToken) {
@@ -410,6 +469,10 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/applecart/sidebar/recents" && req.method === "GET") {
       return proxySidebarPayload(req, "listRecents")
+    }
+
+    if (url.pathname === "/api/applecart/records/sync" && req.method === "POST") {
+      return proxySyncRecordValues(req)
     }
 
     if (url.pathname === "/api/threads" && req.method === "POST") {

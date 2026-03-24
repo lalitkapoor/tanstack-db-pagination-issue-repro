@@ -6,7 +6,8 @@
   "scripts": {
     "dev:server": "bun --watch server.ts",
     "dev:client": "vite dev",
-    "db:query": "bun scripts/query-server-db.ts"
+    "db:query": "bun scripts/query-server-db.ts",
+    "generate:message-store-primus-client": "node scripts/generate-message-store-primus-client.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -43,6 +44,8 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "bun-types": "^1.3.10",
+    "engine.io": "^6.6.6",
+    "primus": "^8.0.9",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
     "vite": "^7.3.1"
