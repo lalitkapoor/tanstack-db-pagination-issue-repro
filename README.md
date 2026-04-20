@@ -256,8 +256,8 @@ This branch sets up:
 - all collections using the same shared `BrowserCollectionCoordinator`
 - one collection using a different `schemaVersion`
 
-The goal is to show that this setup produces coordinator warnings and errors in
-the browser.
+The goal is to show that this setup produces coordinator warnings and
+browser-visible bugs.
 
 #### Run it
 
