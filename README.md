@@ -269,11 +269,8 @@ The symptoms we saw before building this repo were:
 - coordinator warnings such as:
   - `Failed to acquire leadership for ...`
   - `Failed to ensure remote subset`
-  - `Failed to ensure persisted index through coordinator`
 - cross-tab instability, where state could look correct in one tab but differ in
   another
-- refresh-time bugs, where data that appeared to be present cross-tab could be
-  missing or rehydrated differently after reload
 
 This repo is intended to demonstrate that same family of bugs in a smaller
 harness: one shared persistence, one shared coordinator, and one collection on a
@@ -301,6 +298,9 @@ await window.__reproDb.collectionRegistry()
 ```
 
 5. Inspect the console in both tabs.
+
+The core repro does not require adding a todo or reloading the second tab. The
+stable signal is the cross-tab mismatch plus the coordinator warnings.
 
 #### Expected observations
 

@@ -271,10 +271,10 @@ export function App() {
               <CardDescription className="max-w-2xl">
                 This branch intentionally shares one coordinator-backed SQLite
                 persistence across `threads` + `messages` (schema 2) and a
-                local-only `todos` collection (schema 1). Open a second tab,
-                add a todo, then reload the second tab to observe unstable
-                persisted behavior. Watch the console for repeated coordinator
-                warnings from the query-backed path.
+                local-only `todos` collection (schema 1). Open a second tab and
+                compare `window.__reproDb.collectionRegistry()` between tabs,
+                then inspect the console for coordinator warnings from the
+                query-backed path.
               </CardDescription>
             </div>
             <CardAction className="flex items-center gap-2">
@@ -369,7 +369,8 @@ export function App() {
                 <CardDescription>
                   Local-only persisted collection on schema 1 sharing the same
                   coordinator-backed persistence as the schema-2 query
-                  collections.
+                  collections. This collection exists to put one persisted
+                  collection on a different schema version from the others.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
@@ -395,12 +396,18 @@ export function App() {
                   </div>
                   <ol className="mt-2 list-decimal space-y-1 pl-4">
                     <li>Click Reset SQLite.</li>
-                    <li>Open this page in a second tab.</li>
-                    <li>Add a todo in tab A and confirm it appears in tab B.</li>
-                    <li>Refresh tab B.</li>
                     <li>
-                      Check whether the todo disappears and inspect the console
-                      plus <code>window.__reproDb.collectionRegistry()</code>.
+                      Run <code>window.__reproDb.collectionRegistry()</code> in
+                      tab A.
+                    </li>
+                    <li>Open this page in a second tab.</li>
+                    <li>
+                      Run <code>window.__reproDb.collectionRegistry()</code> in
+                      tab B.
+                    </li>
+                    <li>
+                      Compare schema versions across tabs and inspect the
+                      console for coordinator warnings.
                     </li>
                   </ol>
                 </div>
