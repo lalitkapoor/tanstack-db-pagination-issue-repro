@@ -250,14 +250,14 @@ persistence across:
 - `threads` and `messages` on schema version `2`
 - `todos` on schema version `1`
 
-The goal is to show this exact setup:
+This branch sets up:
 
 - all collections on the same shared browser SQLite persistence
 - all collections using the same shared `BrowserCollectionCoordinator`
 - one collection using a different `schemaVersion`
 
-The expected outcome is not a semantic data bug. The repro is successful if
-this setup produces coordinator warnings and errors in the browser.
+The goal is to show that this setup produces coordinator warnings and errors in
+the browser.
 
 #### Run it
 
