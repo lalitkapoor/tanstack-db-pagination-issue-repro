@@ -51,11 +51,13 @@ export function App() {
   const db = getDB()
   const threads = db.threads.collection
   const messages = db.messages.collection
+  const todos = db.todos.collection
   const [selectedThreadId, setSelectedThreadId] = useState(SEEDED_THREAD_ID)
   const [threadLookupId, setThreadLookupId] = useState(SEEDED_THREAD_ID)
   const [messageAnchorCreatedAt, setMessageAnchorCreatedAt] = useState(() =>
     Date.now(),
   )
+  const [newTodoText, setNewTodoText] = useState("")
   const [newThreadTitle, setNewThreadTitle] = useState("")
   const [messageInput, setMessageInput] = useState("")
   const [displayFetchCount, setDisplayFetchCount] = useState(
@@ -127,6 +129,15 @@ export function App() {
         .orderBy(({ message }) => message.createdAt, "asc")
         .orderBy(({ message }) => message.id, "asc"),
     [selectedThreadId, messageAnchorCreatedAt],
+  )
+
+  const { data: persistedTodos = [] } = useLiveQuery(
+    (q) =>
+      q
+        .from({ todo: todos })
+        .orderBy(({ todo }) => todo.createdAt, "desc")
+        .orderBy(({ todo }) => todo.id, "desc"),
+    [],
   )
 
   const selectThread = useCallback((threadId: string) => {
@@ -216,6 +227,16 @@ export function App() {
     selectThread(id)
   }
 
+  const handleCreateTodo = () => {
+    const text = newTodoText.trim()
+    if (!text) {
+      return
+    }
+
+    db.todos.add(text)
+    setNewTodoText("")
+  }
+
   const handleLoadThreadById = () => {
     const id = threadLookupId.trim()
     if (!id) {
@@ -245,16 +266,26 @@ export function App() {
                 TanStack DB Testbed
               </Badge>
               <CardTitle className="text-lg">
-                Threads + Messages Repro
+                BrowserCollectionCoordinator Mixed-Schema Repro
               </CardTitle>
               <CardDescription className="max-w-2xl">
-                Exercises paginated thread lists, selected thread detail
-                fetches, and nested thread-scoped message routes.
+                This branch intentionally shares one coordinator-backed SQLite
+                persistence across `threads` + `messages` (schema 2) and a
+                local-only `todos` collection (schema 1). Open a second tab,
+                add a todo, then reload the second tab to observe unstable
+                persisted behavior. Watch the console for repeated coordinator
+                warnings from the query-backed path.
               </CardDescription>
             </div>
             <CardAction className="flex items-center gap-2">
               <Badge variant="secondary" className="h-7 px-2.5 text-[0.625rem]">
                 fetches {displayFetchCount}
+              </Badge>
+              <Badge variant="outline" className="h-7 px-2.5 text-[0.625rem]">
+                threads/messages schema 2
+              </Badge>
+              <Badge variant="outline" className="h-7 px-2.5 text-[0.625rem]">
+                todos schema 1
               </Badge>
               <Button variant="outline" onClick={() => resetDatabase()}>
                 <RefreshCcw />
@@ -265,7 +296,7 @@ export function App() {
         </Card>
 
         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
-          <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_minmax(0,1fr)]">
+          <div className="grid min-h-0 gap-3 lg:grid-rows-[auto_auto_minmax(0,1fr)]">
             <Card className="border border-border/60 shadow-none" size="sm">
               <CardHeader>
                 <CardTitle>Thread Controls</CardTitle>
@@ -328,6 +359,70 @@ export function App() {
                       <Search />
                     </Button>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border/60 shadow-none" size="sm">
+              <CardHeader>
+                <CardTitle>Local Todos Repro</CardTitle>
+                <CardDescription>
+                  Local-only persisted collection on schema 1 sharing the same
+                  coordinator-backed persistence as the schema-2 query
+                  collections.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add a tab-shared local todo"
+                    value={newTodoText}
+                    onChange={(event) => setNewTodoText(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        handleCreateTodo()
+                      }
+                    }}
+                  />
+                  <Button size="icon" onClick={handleCreateTodo}>
+                    <Plus />
+                  </Button>
+                </div>
+
+                <div className="rounded-md border border-dashed border-border/80 bg-muted/15 p-3 text-xs text-muted-foreground">
+                  <div className="font-medium text-foreground">
+                    Repro steps
+                  </div>
+                  <ol className="mt-2 list-decimal space-y-1 pl-4">
+                    <li>Click Reset SQLite.</li>
+                    <li>Open this page in a second tab.</li>
+                    <li>Add a todo in tab A and confirm it appears in tab B.</li>
+                    <li>Refresh tab B.</li>
+                    <li>
+                      Check whether the todo disappears and inspect the console
+                      plus <code>window.__reproDb.collectionRegistry()</code>.
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="space-y-2">
+                  {persistedTodos.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border/80 bg-background px-3 py-4 text-xs text-muted-foreground">
+                      No local todos yet.
+                    </div>
+                  ) : (
+                    persistedTodos.map((todo) => (
+                      <div
+                        key={todo.id}
+                        className="rounded-md border border-border bg-background px-3 py-2"
+                      >
+                        <div className="text-sm font-medium">{todo.text}</div>
+                        <div className="text-[0.7rem] text-muted-foreground">
+                          {todo.id}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

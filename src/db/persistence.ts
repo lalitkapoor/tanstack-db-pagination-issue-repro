@@ -1,4 +1,5 @@
 import {
+  BrowserCollectionCoordinator,
   createBrowserWASQLitePersistence,
   openBrowserWASQLiteOPFSDatabase,
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
@@ -13,6 +14,14 @@ type BrowserSQLiteDebug = {
     statement: string,
     params?: ReadonlyArray<unknown>,
   ) => Promise<ReadonlyArray<TRow>>
+  collectionRegistry: () => Promise<
+    ReadonlyArray<{
+      collection_id: string
+      schema_version: number
+      table_name: string
+      tombstone_table_name: string
+    }>
+  >
   tables: () => Promise<ReadonlyArray<{ name: string }>>
 }
 
@@ -27,7 +36,13 @@ export class DatabaseContext {
 
   constructor(private readonly database: BrowserWASQLiteDatabase) {
     this.persistence = createBrowserWASQLitePersistence<PersistedRow, string>({
+      coordinator: new BrowserCollectionCoordinator({
+        dbName: "repro.sqlite",
+      }),
       database: this.database,
+      // Intentionally reset on mismatch so mixed-schema behavior shows up as
+      // unstable persisted state instead of hard init failures.
+      schemaMismatchPolicy: "reset",
     })
   }
 
@@ -40,6 +55,17 @@ export class DatabaseContext {
   public get debug(): BrowserSQLiteDebug {
     return {
       sql: (statement, params = []) => this.database.execute(statement, params),
+      collectionRegistry: () =>
+        this.database.execute<{
+          collection_id: string
+          schema_version: number
+          table_name: string
+          tombstone_table_name: string
+        }>(
+          `select collection_id, schema_version, table_name, tombstone_table_name
+           from collection_registry
+           order by collection_id`,
+        ),
       tables: () =>
         this.database.execute<{ name: string }>(
           "select name from sqlite_master where type = ? order by name",
@@ -68,6 +94,9 @@ export async function initPersistence() {
     window.__reproDb = _databaseContext.debug
     console.info(
       "[debug] window.__reproDb.sql(statement, params?) is available for client SQLite inspection",
+    )
+    console.info(
+      "[debug] window.__reproDb.collectionRegistry() shows collection schema versions",
     )
   }
 
