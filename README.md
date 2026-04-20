@@ -113,6 +113,7 @@ Available helpers:
 ```js
 await window.__reproDb.tables()
 await window.__reproDb.sql("select * from sqlite_master")
+await window.__reproDb.collectionRegistry()
 await window.__reproDb.sql("select count(*) as count from c_xxx")
 ```
 
@@ -236,6 +237,88 @@ If you want to inspect same-timestamp ordering issues:
 This is useful because user messages and fake assistant replies can land in the
 same millisecond. When that happens, ordering falls back to `id DESC`, which is
 UUID-based and not conversationally meaningful.
+
+### Mixed-schema BrowserCollectionCoordinator repro
+
+Branch:
+
+- `v2-browser-coordinator-mixed-schema-repro`
+
+This branch intentionally shares one coordinator-backed browser SQLite
+persistence across:
+
+- `threads` and `messages` on schema version `2`
+- `todos` on schema version `1`
+
+The goal is to show that a single shared
+`BrowserCollectionCoordinator` becomes unstable when collections on the same
+database resolve to different persisted adapters.
+
+#### Run it
+
+Use the normal repo startup instructions, then open the client in two tabs.
+
+#### Repro steps
+
+1. Click **Reset SQLite**.
+2. In tab A, run:
+
+```js
+await window.__reproDb.collectionRegistry()
+```
+
+3. Open the same page in tab B.
+4. In tab B, run:
+
+```js
+await window.__reproDb.collectionRegistry()
+```
+
+5. Inspect the console in both tabs.
+
+#### Expected observations
+
+On tab A, immediately after reset, we observed:
+
+```json
+[
+  { "collection_id": "messages", "schema_version": 1 },
+  { "collection_id": "threads", "schema_version": 1 },
+  { "collection_id": "todos", "schema_version": 1 }
+]
+```
+
+and console warnings:
+
+- `Failed to acquire leadership for threads`
+- `Failed to acquire leadership for messages`
+
+with payload:
+
+```json
+{ "code": "INTERNAL", "name": "OPFSWorkerRequestError" }
+```
+
+On tab B, against the same underlying OPFS database, we observed:
+
+```json
+[
+  { "collection_id": "messages", "schema_version": 2 },
+  { "collection_id": "threads", "schema_version": 2 },
+  { "collection_id": "todos", "schema_version": 1 }
+]
+```
+
+and repeated console spam:
+
+- `Failed to ensure remote subset`
+
+This branch does not depend on the todo disappearing after refresh. The stable
+repro is the combination of:
+
+- conflicting `collection_registry` schema-version state across tabs
+- `OPFSWorkerRequestError` while acquiring coordinator leadership
+- repeated `Failed to ensure remote subset` warnings in the second tab
 
 ## How to debug a suspected gap
 
