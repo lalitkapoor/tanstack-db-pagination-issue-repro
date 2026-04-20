@@ -259,6 +259,27 @@ This branch sets up:
 The goal is to show that this setup produces coordinator warnings and
 browser-visible bugs.
 
+More specifically, this repro exists because in larger app experiments we hit
+the same class of problems when all collections shared one persistence and one
+`BrowserCollectionCoordinator`, but one collection used a different
+`schemaVersion`.
+
+The symptoms we saw before building this repo were:
+
+- coordinator warnings such as:
+  - `Failed to acquire leadership for ...`
+  - `Failed to ensure remote subset`
+  - `Failed to ensure persisted index through coordinator`
+- cross-tab instability, where state could look correct in one tab but differ in
+  another
+- refresh-time bugs, where data that appeared to be present cross-tab could be
+  missing or rehydrated differently after reload
+
+This repo is intended to demonstrate that same family of bugs in a smaller
+harness: one shared persistence, one shared coordinator, and one collection on a
+different schema version leading to warnings plus observable cross-tab
+misbehavior.
+
 #### Run it
 
 Use the normal repo startup instructions, then open the client in two tabs.
