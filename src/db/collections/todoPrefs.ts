@@ -1,5 +1,5 @@
 import { createCollection } from "@tanstack/db"
-import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+import { persistedCollectionOptions } from "@tanstack/browser-db-sqlite-persistence"
 import type { DatabaseContext } from "../persistence"
 
 type TodoPrefs = {

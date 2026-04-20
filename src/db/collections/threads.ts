@@ -6,7 +6,7 @@ import {
   type LoadSubsetOptions,
   walkExpression,
 } from "@tanstack/db"
-import { persistedCollectionOptions } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+import { persistedCollectionOptions } from "@tanstack/browser-db-sqlite-persistence"
 import { queryCollectionOptions } from "@tanstack/query-db-collection"
 import type { QueryClient } from "@tanstack/react-query"
 import { fetchJson, persist } from "../http"

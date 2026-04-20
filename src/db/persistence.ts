@@ -2,11 +2,11 @@ import {
   BrowserCollectionCoordinator,
   createBrowserWASQLitePersistence,
   openBrowserWASQLiteOPFSDatabase,
-} from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+} from "@tanstack/browser-db-sqlite-persistence"
 import type {
   BrowserWASQLiteDatabase,
   PersistedCollectionPersistence,
-} from "@tanstack/db-browser-wa-sqlite-persisted-collection"
+} from "@tanstack/browser-db-sqlite-persistence"
 
 type PersistedRow = Record<string, unknown>
 type BrowserSQLiteDebug = {
