@@ -1,4 +1,5 @@
 import {
+  BrowserCollectionCoordinator,
   createBrowserWASQLitePersistence,
   openBrowserWASQLiteOPFSDatabase,
 } from "@tanstack/db-browser-wa-sqlite-persisted-collection"
@@ -13,6 +14,14 @@ type BrowserSQLiteDebug = {
     statement: string,
     params?: ReadonlyArray<unknown>,
   ) => Promise<ReadonlyArray<TRow>>
+  collectionRegistry: () => Promise<
+    ReadonlyArray<{
+      collection_id: string
+      schema_version: number
+      table_name: string
+      tombstone_table_name: string
+    }>
+  >
   tables: () => Promise<ReadonlyArray<{ name: string }>>
 }
 
@@ -27,19 +36,32 @@ export class DatabaseContext {
 
   constructor(private readonly database: BrowserWASQLiteDatabase) {
     this.persistence = createBrowserWASQLitePersistence<PersistedRow, string>({
+      coordinator: new BrowserCollectionCoordinator({
+        dbName: "repro.sqlite",
+      }),
       database: this.database,
+      schemaMismatchPolicy: "reset",
     })
   }
 
   public createPersistence<T extends object>() {
-    // Browser OPFS persistence is intended to be shared per database. Expose
-    // typed collection views over that one shared runtime instance.
     return this.persistence as unknown as PersistedCollectionPersistence<T, string>
   }
 
   public get debug(): BrowserSQLiteDebug {
     return {
       sql: (statement, params = []) => this.database.execute(statement, params),
+      collectionRegistry: () =>
+        this.database.execute<{
+          collection_id: string
+          schema_version: number
+          table_name: string
+          tombstone_table_name: string
+        }>(
+          `select collection_id, schema_version, table_name, tombstone_table_name
+           from collection_registry
+           order by collection_id`,
+        ),
       tables: () =>
         this.database.execute<{ name: string }>(
           "select name from sqlite_master where type = ? order by name",
@@ -66,9 +88,6 @@ export async function initPersistence() {
 
   if (import.meta.env.DEV) {
     window.__reproDb = _databaseContext.debug
-    console.info(
-      "[debug] window.__reproDb.sql(statement, params?) is available for client SQLite inspection",
-    )
   }
 
   return _databaseContext
@@ -87,7 +106,6 @@ async function closePersistence() {
   }
 }
 
-/** Delete the client OPFS SQLite storage after live collections are stopped. */
 export async function resetPersistenceStorage() {
   await closePersistence()
 

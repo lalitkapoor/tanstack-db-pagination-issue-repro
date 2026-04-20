@@ -5,7 +5,7 @@
 
 import { createServerDatabase } from "./server/database"
 import { createEventHub } from "./server/sse"
-import type { Message, Thread } from "./server/types"
+import type { Message, Thread, Todo } from "./server/types"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "http://localhost:11000",
@@ -25,6 +25,10 @@ function getThreadMessagesPath(pathname: string) {
   return {
     threadId: decodeURIComponent(match[1]),
   }
+}
+
+function getTodosPath(pathname: string) {
+  return pathname === "/api/todos"
 }
 
 function scheduleAssistantReply(userMessage: Message) {
@@ -66,6 +70,43 @@ const server = Bun.serve({
     }
 
     const threadMessagesPath = getThreadMessagesPath(url.pathname)
+    const todosPath = getTodosPath(url.pathname)
+
+    if (todosPath && req.method === "GET") {
+      const limit = Number(url.searchParams.get("limit") || "20")
+      const beforeCreatedAt = url.searchParams.get("beforeCreatedAt")
+      const beforeId = url.searchParams.get("beforeId")
+      const before =
+        beforeCreatedAt && beforeId
+          ? {
+              createdAt: Number(beforeCreatedAt),
+              id: beforeId,
+            }
+          : beforeCreatedAt
+            ? Number(beforeCreatedAt)
+            : undefined
+
+      const result = database.listTodos(limit, before)
+
+      console.log(
+        `[server] GET /api/todos limit=${limit} beforeCreatedAt=${beforeCreatedAt ?? "none"} beforeId=${beforeId ?? "none"} -> ${result.length} todos`,
+      )
+
+      return Response.json(result, { headers: corsHeaders })
+    }
+
+    if (todosPath && req.method === "POST") {
+      const body = (await req.json()) as Todo
+      const todo: Todo = {
+        id: body.id || crypto.randomUUID(),
+        text: body.text,
+        createdAt: Date.now(),
+      }
+
+      database.insertTodo(todo)
+      console.log(`[server] POST /api/todos id=${todo.id} text=${todo.text}`)
+      return Response.json(todo, { headers: corsHeaders })
+    }
 
     if (threadMessagesPath && req.method === "GET") {
       const { threadId } = threadMessagesPath
@@ -218,8 +259,9 @@ const server = Bun.serve({
   },
 })
 
-const { threadCount, messageCount } = database.getCounts()
+const { threadCount, messageCount, todoCount } = database.getCounts()
 
 console.log(`[server] Listening on http://localhost:${server.port}`)
 console.log(`[server] Using SQLite database at ${database.path}`)
 console.log(`[server] Loaded ${threadCount} threads and ${messageCount} messages`)
+console.log(`[server] Loaded ${todoCount} todos`)

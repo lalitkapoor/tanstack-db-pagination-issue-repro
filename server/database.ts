@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { SEEDED_THREAD_ID } from "../src/shared/seed"
-import type { Message, Thread } from "./types"
+import type { Message, Thread, Todo } from "./types"
 
 const SEED_BASE = 1735689600000
 const BOOTSTRAP_VERSION = "1"
@@ -12,6 +12,12 @@ type ThreadRow = {
   title: string
   created_at: number
   updated_at: number
+}
+
+type TodoRow = {
+  id: string
+  text: string
+  created_at: number
 }
 
 type MessageRow = {
@@ -55,6 +61,14 @@ function toMessage(row: MessageRow): Message {
   }
 }
 
+function toTodo(row: TodoRow): Todo {
+  return {
+    id: row.id,
+    text: row.text,
+    createdAt: row.created_at,
+  }
+}
+
 type CreateServerDatabaseOptions = {
   path?: string
   bootstrap?: boolean
@@ -82,6 +96,12 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS todos (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
       thread_id TEXT NOT NULL,
@@ -94,6 +114,9 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
     CREATE INDEX IF NOT EXISTS idx_threads_updated_at
       ON threads(updated_at DESC, id DESC);
 
+    CREATE INDEX IF NOT EXISTS idx_todos_created_at
+      ON todos(created_at DESC, id DESC);
+
     CREATE INDEX IF NOT EXISTS idx_messages_thread_created_at
       ON messages(thread_id, created_at DESC, id DESC);
   `)
@@ -103,6 +126,9 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
   )
   const countMessagesStatement = db.query<{ count: number }, []>(
     "SELECT COUNT(*) AS count FROM messages",
+  )
+  const countTodosStatement = db.query<{ count: number }, []>(
+    "SELECT COUNT(*) AS count FROM todos",
   )
   const getMetadataStatement = db.query<{ value: string }, [string]>(
     "SELECT value FROM app_metadata WHERE key = ?1",
@@ -143,6 +169,33 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
   const insertThreadStatement = db.query<never, [string, string, number, number]>(`
     INSERT INTO threads (id, title, created_at, updated_at)
     VALUES (?1, ?2, ?3, ?4)
+  `)
+  const listTodosStatement = db.query<TodoRow, [number, number]>(`
+    SELECT id, text, created_at
+    FROM todos
+    WHERE created_at < ?2
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?1
+  `)
+  const listTodosCursorStatement = db.query<TodoRow, [number, number, string]>(`
+    SELECT id, text, created_at
+    FROM todos
+    WHERE (
+      created_at < ?2
+      OR (created_at = ?2 AND id < ?3)
+    )
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?1
+  `)
+  const listTodosLatestStatement = db.query<TodoRow, [number]>(`
+    SELECT id, text, created_at
+    FROM todos
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?1
+  `)
+  const insertTodoStatement = db.query<never, [string, string, number]>(`
+    INSERT INTO todos (id, text, created_at)
+    VALUES (?1, ?2, ?3)
   `)
   const updateThreadStatement = db.query<never, [string, string, number, number]>(`
     UPDATE threads
@@ -253,6 +306,17 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
       seedDatabaseUnsafe()
     }
 
+    const todoCount = countTodosStatement.get()?.count ?? 0
+    if (todoCount === 0) {
+      for (let i = 0; i < 20; i++) {
+        insertTodoStatement.run(
+          `todo-${i + 1}`,
+          `Seeded todo #${i + 1}`,
+          SEED_BASE + i * 1000,
+        )
+      }
+    }
+
     setMetadataStatement.run("bootstrap_version", BOOTSTRAP_VERSION)
   })
 
@@ -278,7 +342,19 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
       return {
         threadCount: countThreadsStatement.get()?.count ?? 0,
         messageCount: countMessagesStatement.get()?.count ?? 0,
+        todoCount: countTodosStatement.get()?.count ?? 0,
       }
+    },
+
+    listTodos(limit: number, before?: number | MessageCursor) {
+      const rows =
+        before == null
+          ? listTodosLatestStatement.all(limit)
+          : typeof before === "number"
+            ? listTodosStatement.all(limit, before)
+            : listTodosCursorStatement.all(limit, before.createdAt, before.id)
+
+      return rows.map(toTodo)
     },
 
     listThreads(limit: number, before?: number | ThreadCursor) {
@@ -374,6 +450,11 @@ export function createServerDatabase(options: CreateServerDatabaseOptions = {}) 
 
     insertMessage(input: Message) {
       insertMessageAndTouchThread(input)
+      return input
+    },
+
+    insertTodo(input: Todo) {
+      insertTodoStatement.run(input.id, input.text, input.createdAt)
       return input
     },
 

@@ -12,3 +12,9 @@ export type Thread = {
   createdAt: number
   updatedAt: number
 }
+
+export type Todo = {
+  id: string
+  text: string
+  createdAt: number
+}

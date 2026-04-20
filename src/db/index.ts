@@ -4,30 +4,28 @@ import {
   resetPersistenceStorage,
   type DatabaseContext,
 } from "./persistence"
-import { MessagesStore } from "./collections/messages"
-import { ThreadsStore } from "./collections/threads"
+import { TodoPrefsStore } from "./collections/todoPrefs"
+import { TodosStore } from "./collections/todos"
 
 type CleanupTarget = {
   cleanup(): Promise<void>
 }
 
 class AppDB {
-  public readonly messages: MessagesStore
-  public readonly threads: ThreadsStore
+  public readonly todoPrefs: TodoPrefsStore
+  public readonly todos: TodosStore
   private cleanupTargets: CleanupTarget[] = []
 
   constructor(queryClient: QueryClient, databaseContext: DatabaseContext) {
-    this.messages = new MessagesStore(queryClient, databaseContext)
-    this.threads = new ThreadsStore(queryClient, databaseContext)
+    this.todos = new TodosStore(queryClient, databaseContext)
+    this.todoPrefs = new TodoPrefsStore(databaseContext)
   }
 
   public async init() {
-    const [messagesCollection, threadsCollection] = await Promise.all([
-      this.messages.init(),
-      this.threads.init(),
-    ])
+    const todosCollection = await this.todos.init()
+    const todoPrefsCollection = await this.todoPrefs.init()
 
-    this.cleanupTargets = [messagesCollection, threadsCollection]
+    this.cleanupTargets = [todosCollection, todoPrefsCollection]
     return this
   }
 
